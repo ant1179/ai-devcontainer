@@ -1,0 +1,6 @@
+.devcontainer/*
+**/*.env*
+**/*age*
+**/*.pem
+**/secrets/*
+scripts/*

@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
+GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
+
+if [[ ! -f "${DENYLIST_FILE}" ]]; then
+  echo "Missing denylist: ${DENYLIST_FILE}" >&2
+  exit 1
+fi
+
+echo "Security mode:"
+echo
+echo "  1) hardened  - sudo available, password required every time"
+echo "  2) bunkered  - privilege escalation completely disabled"
+echo
+
+while true; do
+  printf "Select mode [1/2]: "
+  read -r choice
+
+  case "${choice}" in
+  1)
+    SECURITY_MODE="hardened"
+    break
+    ;;
+  2)
+    SECURITY_MODE="bunkered"
+    break
+    ;;
+  *)
+    echo "Invalid choice."
+    ;;
+  esac
+done
+
+echo
+echo "Security mode: ${SECURITY_MODE}"
+echo
+
+TMP_MATCHES="$(mktemp)"
+trap 'rm -f "${TMP_MATCHES}"' EXIT
+
+while IFS= read -r pattern; do
+  [[ -z "${pattern}" ]] && continue
+  [[ "${pattern}" =~ ^[[:space:]]*# ]] && continue
+
+  (
+    cd "${REPO_ROOT}"
+    find . \
+      -path "./.git" -prune \
+      -o -path "./${pattern}" -print
+  ) >>"${TMP_MATCHES}"
+
+done <"${DENYLIST_FILE}"
+
+{
+  echo "services:"
+  echo "  app:"
+
+  echo "    cap_drop:"
+  echo "      - ALL"
+
+  if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+    echo "    cap_add:"
+    echo "      - SETUID"
+    echo "      - SETGID"
+    echo "      - AUDIT_WRITE"
+  else
+    echo "    security_opt:"
+    echo "      - no-new-privileges:true"
+  fi
+
+  echo "    volumes:"
+
+  sort -u "${TMP_MATCHES}" | while IFS= read -r file; do
+    relative="${file#./}"
+
+    if [[ -d "${REPO_ROOT}/${relative}" ]]; then
+      echo "      - type: tmpfs"
+      echo "        target: /workspace/${relative}"
+    else
+      echo "      - /dev/null:/workspace/${relative}:ro"
+    fi
+  done
+
+} >"${GENERATED_FILE}"
+
+echo "Generated: ${GENERATED_FILE}"

@@ -1,0 +1,9 @@
+[env]
+_.file = ".env.json"
+
+[tools]
+kubectl = "latest"
+flux2 = "latest"
+kubectx = "latest"
+kubens = "latest"
+k9s = "latest"

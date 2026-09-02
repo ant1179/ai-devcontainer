@@ -1,0 +1,6 @@
+{
+  "name": "ai-devcontainer",
+  "dockerComposeFile": "docker-compose.yaml",
+  "service": "app",
+  "postCreateCommand": "scripts/setup"
+}

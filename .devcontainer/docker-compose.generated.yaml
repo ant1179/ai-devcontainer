@@ -1,0 +1,15 @@
+services:
+  app:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /dev/null:/workspace/.devcontainer/.env:ro
+      - /dev/null:/workspace/.devcontainer/ai-denylist:ro
+      - /dev/null:/workspace/.devcontainer/devcontainer.json:ro
+      - /dev/null:/workspace/.devcontainer/docker-compose.generated.yaml:ro
+      - /dev/null:/workspace/.devcontainer/docker-compose.yaml:ro
+      - /dev/null:/workspace/.devcontainer/Dockerfile:ro
+      - /dev/null:/workspace/scripts/bootstrap:ro
+      - /dev/null:/workspace/scripts/setup:ro
