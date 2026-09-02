@@ -5,6 +5,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
 GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
+ENV_FILE="${REPO_ROOT}/.devcontainer/.env"
 
 if [[ ! -f "${DENYLIST_FILE}" ]]; then
   echo "Missing denylist: ${DENYLIST_FILE}" >&2
@@ -39,6 +40,60 @@ done
 echo
 echo "Security mode: ${SECURITY_MODE}"
 echo
+
+if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+  while true; do
+    printf "Sudo password: "
+    stty -echo
+    read -r password
+    stty echo
+    echo
+
+    printf "Confirm sudo password: "
+    stty -echo
+    read -r password_confirm
+    stty echo
+    echo
+
+    if [[ "${password}" != "${password_confirm}" ]]; then
+      echo "Passwords do not match."
+      continue
+    fi
+
+    if [[ -z "${password}" ]]; then
+      echo "Password cannot be empty."
+      continue
+    fi
+
+    break
+  done
+
+  VSCODE_PASSWORD_HASH="$(
+    printf '%s' "${password}" | openssl passwd -6 -stdin
+  )"
+
+  unset password
+  unset password_confirm
+
+  # Escape $ for Docker Compose .env interpolation.
+  VSCODE_PASSWORD_HASH_ESCAPED="$(
+    printf '%s' "${VSCODE_PASSWORD_HASH}" | sed 's/\$/$$/g'
+  )"
+
+  if [[ -f "${ENV_FILE}" ]] && grep -q '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}"; then
+    tmp_env="$(mktemp)"
+
+    grep -v '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" >"${tmp_env}"
+    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH_ESCAPED}" >>"${tmp_env}"
+
+    mv "${tmp_env}" "${ENV_FILE}"
+  else
+    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH_ESCAPED}" >>"${ENV_FILE}"
+  fi
+
+  unset VSCODE_PASSWORD_HASH
+  unset VSCODE_PASSWORD_HASH_ESCAPED
+fi
 
 TMP_MATCHES="$(mktemp)"
 trap 'rm -f "${TMP_MATCHES}"' EXIT
