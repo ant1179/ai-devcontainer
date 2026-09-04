@@ -29,3 +29,5 @@ build/
 
 # OS
 .DS_Store
+
+.devcontainer/.env
