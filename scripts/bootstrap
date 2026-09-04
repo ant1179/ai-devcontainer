@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
 GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
 ENV_FILE="${REPO_ROOT}/.devcontainer/.env"
+GITIGNORE_FILE="${REPO_ROOT}/.gitignore"
 
 if [[ ! -f "${DENYLIST_FILE}" ]]; then
   echo "Missing denylist: ${DENYLIST_FILE}" >&2
@@ -83,7 +84,7 @@ if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   if [[ -f "${ENV_FILE}" ]] && grep -q '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}"; then
     tmp_env="$(mktemp)"
 
-    grep -v '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" >"${tmp_env}"
+    grep -v '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" >"${tmp_env}" || true
     printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH_ESCAPED}" >>"${tmp_env}"
 
     mv "${tmp_env}" "${ENV_FILE}"
@@ -95,6 +96,49 @@ if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   unset VSCODE_PASSWORD_HASH_ESCAPED
 fi
 
+# Ensure the local environment file cannot be committed.
+if ! grep -qxF '.devcontainer/.env' "${GITIGNORE_FILE}" 2>/dev/null; then
+  printf '\n.devcontainer/.env\n' >>"${GITIGNORE_FILE}"
+  echo "Added .devcontainer/.env to .gitignore"
+fi
+
+# Configure the GitHub token used by mise during the image build.
+if grep -q '^MISE_GITHUB_TOKEN=.' "${ENV_FILE}" 2>/dev/null; then
+  echo "GitHub token: already configured"
+else
+  while true; do
+    printf "GitHub token for mise: "
+    stty -echo
+    read -r github_token
+    stty echo
+    echo
+
+    if [[ -z "${github_token}" ]]; then
+      echo "Token cannot be empty."
+      continue
+    fi
+
+    break
+  done
+
+  if [[ -f "${ENV_FILE}" ]]; then
+    tmp_env="$(mktemp)"
+
+    grep -v '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" >"${tmp_env}" || true
+    printf 'MISE_GITHUB_TOKEN=%s\n' "${github_token}" >>"${tmp_env}"
+
+    mv "${tmp_env}" "${ENV_FILE}"
+  else
+    printf 'MISE_GITHUB_TOKEN=%s\n' "${github_token}" >"${ENV_FILE}"
+  fi
+
+  unset github_token
+
+  echo "GitHub token: configured"
+fi
+
+chmod 600 "${ENV_FILE}"
+
 TMP_MATCHES="$(mktemp)"
 trap 'rm -f "${TMP_MATCHES}"' EXIT
 
@@ -104,6 +148,7 @@ while IFS= read -r pattern; do
 
   (
     cd "${REPO_ROOT}"
+
     find . \
       -path "./.git" -prune \
       -o -path "./${pattern}" -print
@@ -143,4 +188,6 @@ done <"${DENYLIST_FILE}"
 
 } >"${GENERATED_FILE}"
 
+echo
 echo "Generated: ${GENERATED_FILE}"
+echo "Bootstrap configuration complete."
