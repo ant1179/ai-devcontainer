@@ -2,8 +2,10 @@ services:
   app:
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges:true
+    cap_add:
+      - SETUID
+      - SETGID
+      - AUDIT_WRITE
     volumes:
       - /dev/null:/workspace/.devcontainer/.env:ro
       - /dev/null:/workspace/.devcontainer/ai-denylist:ro
