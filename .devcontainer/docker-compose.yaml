@@ -1,18 +1,6 @@
 services:
   app:
-    build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
-      args:
-        VSCODE_PASSWORD_HASH: ${VSCODE_PASSWORD_HASH}
-      secrets:
-        - mise_github_token
-
+    image: ai-devcontainer:local
     command: sleep infinity
-
     volumes:
       - ..:/workspace:cached
-
-secrets:
-  mise_github_token:
-    environment: MISE_GITHUB_TOKEN
