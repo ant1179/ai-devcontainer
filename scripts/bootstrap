@@ -139,6 +139,46 @@ fi
 
 chmod 600 "${ENV_FILE}"
 
+IMAGE_NAME="ai-devcontainer:local"
+
+# Read build credentials without exporting them globally.
+MISE_GITHUB_TOKEN="$(
+  grep '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" |
+    cut -d= -f2-
+)"
+
+VSCODE_PASSWORD_HASH="$(
+  grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" |
+    cut -d= -f2- |
+    sed 's/\$\$/\$/g'
+)"
+
+if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
+  echo "Missing MISE_GITHUB_TOKEN." >&2
+  exit 1
+fi
+
+if [[ "${SECURITY_MODE}" == "hardened" ]] && [[ -z "${VSCODE_PASSWORD_HASH}" ]]; then
+  echo "Missing VSCODE_PASSWORD_HASH." >&2
+  exit 1
+fi
+
+echo
+echo "Building devcontainer image..."
+
+MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
+  podman build \
+  --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
+  --build-arg VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
+  -f "${REPO_ROOT}/.devcontainer/Dockerfile" \
+  -t "${IMAGE_NAME}" \
+  "${REPO_ROOT}"
+
+unset MISE_GITHUB_TOKEN
+unset VSCODE_PASSWORD_HASH
+
+echo "Image built: ${IMAGE_NAME}"
+
 TMP_MATCHES="$(mktemp)"
 trap 'rm -f "${TMP_MATCHES}"' EXIT
 
