@@ -2,8 +2,6 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
 COPY --from=jdxcode/mise /usr/local/bin/mise /usr/local/bin/
 
-ARG VSCODE_PASSWORD_HASH
-
 USER root
 
 RUN apt-get update \
@@ -17,8 +15,9 @@ RUN rm -f /etc/sudoers.d/vscode \
     && usermod -aG sudo vscode
 
 # Set vscode password from a pre-computed hash.
-RUN test -n "${VSCODE_PASSWORD_HASH}" \
-    && usermod --password "${VSCODE_PASSWORD_HASH}" vscode
+RUN --mount=type=secret,id=vscode_password_hash \
+    test -s /run/secrets/vscode_password_hash \
+    && usermod --password "$(cat /run/secrets/vscode_password_hash)" vscode
 
 # Always require the sudo password and do not cache authentication.
 RUN printf '%s\n' \

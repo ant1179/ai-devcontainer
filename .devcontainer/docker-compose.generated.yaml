@@ -5,10 +5,7 @@ services:
     cap_add:
       - SETUID
       - SETGID
-      - CHOWN
-      - DAC_OVERRIDE
-    security_opt:
-      - no-new-privileges:true
+      - AUDIT_WRITE
     volumes:
       - /dev/null:/workspaces/vscode/.devcontainer/.env:ro
       - /dev/null:/workspaces/vscode/.devcontainer/ai-denylist:ro
