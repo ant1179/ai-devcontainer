@@ -163,6 +163,7 @@ echo "Building devcontainer image..."
 MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
   VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
   podman build \
+  --no-cache \
   --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
   --secret id=vscode_password_hash,env=VSCODE_PASSWORD_HASH \
   -f "${REPO_ROOT}/.devcontainer/Dockerfile" \
@@ -221,6 +222,8 @@ done <"${DENYLIST_FILE}"
     if [[ -d "${REPO_ROOT}/${relative}" ]]; then
       echo "      - type: tmpfs"
       echo "        target: /workspaces/vscode/${relative}"
+      echo "        tmpfs:"
+      echo "          mode: 0700"
     else
       echo "      - /dev/null:/workspaces/vscode/${relative}:ro"
     fi

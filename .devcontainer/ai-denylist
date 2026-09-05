@@ -1,6 +1,6 @@
-.devcontainer/*
+.devcontainer
 **/*.env*
 **/*age*
 **/*.pem
 **/secrets/*
-scripts/*
+scripts

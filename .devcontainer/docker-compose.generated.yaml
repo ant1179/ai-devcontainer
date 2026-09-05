@@ -7,10 +7,11 @@ services:
       - SETGID
       - AUDIT_WRITE
     volumes:
-      - /dev/null:/workspaces/vscode/.devcontainer/ai-denylist:ro
-      - /dev/null:/workspaces/vscode/.devcontainer/devcontainer.json:ro
-      - /dev/null:/workspaces/vscode/.devcontainer/docker-compose.generated.yaml:ro
-      - /dev/null:/workspaces/vscode/.devcontainer/docker-compose.yaml:ro
-      - /dev/null:/workspaces/vscode/.devcontainer/Dockerfile:ro
-      - /dev/null:/workspaces/vscode/scripts/bootstrap:ro
-      - /dev/null:/workspaces/vscode/scripts/setup:ro
+      - type: tmpfs
+        target: /workspaces/vscode/.devcontainer
+        tmpfs:
+          mode: 0700
+      - type: tmpfs
+        target: /workspaces/vscode/scripts
+        tmpfs:
+          mode: 0700
