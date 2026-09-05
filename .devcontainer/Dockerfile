@@ -15,8 +15,11 @@ RUN rm -f /etc/sudoers.d/vscode \
     && usermod -aG sudo vscode
 
 # Set vscode password from a pre-computed hash.
+ARG VSCODE_PASSWORD_CACHE_KEY
+
 RUN --mount=type=secret,id=vscode_password_hash \
-    test -s /run/secrets/vscode_password_hash \
+    test -n "${VSCODE_PASSWORD_CACHE_KEY}" \
+    && test -s /run/secrets/vscode_password_hash \
     && usermod --password "$(cat /run/secrets/vscode_password_hash)" vscode
 
 # Always require the sudo password and do not cache authentication.
@@ -31,7 +34,7 @@ COPY --chown=vscode:vscode mise.toml /tmp/mise.toml
 
 USER vscode
 
-RUN --mount=type=secret,id=mise_github_token \
+RUN --mount=type=secret,id=mise_github_token,uid=1000,gid=1000,mode=0400 \
     export MISE_GITHUB_TOKEN="$(cat /run/secrets/mise_github_token)" \
     && cd /tmp \
     && mise trust mise.toml \

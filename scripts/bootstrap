@@ -160,10 +160,14 @@ fi
 echo
 echo "Building devcontainer image..."
 
+VSCODE_PASSWORD_CACHE_KEY="$(
+  printf '%s' "${VSCODE_PASSWORD_HASH}" | sha256sum | cut -d' ' -f1
+)"
+
 MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
   VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
   podman build \
-  --no-cache \
+  --build-arg VSCODE_PASSWORD_CACHE_KEY="${VSCODE_PASSWORD_CACHE_KEY}" \
   --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
   --secret id=vscode_password_hash,env=VSCODE_PASSWORD_HASH \
   -f "${REPO_ROOT}/.devcontainer/Dockerfile" \
