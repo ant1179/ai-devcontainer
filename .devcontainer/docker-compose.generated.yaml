@@ -7,7 +7,6 @@ services:
       - SETGID
       - AUDIT_WRITE
     volumes:
-      - /dev/null:/workspaces/vscode/.devcontainer/.env:ro
       - /dev/null:/workspaces/vscode/.devcontainer/ai-denylist:ro
       - /dev/null:/workspaces/vscode/.devcontainer/devcontainer.json:ro
       - /dev/null:/workspaces/vscode/.devcontainer/docker-compose.generated.yaml:ro

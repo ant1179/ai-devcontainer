@@ -5,8 +5,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
 GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
-ENV_FILE="${REPO_ROOT}/.devcontainer/.env"
-GITIGNORE_FILE="${REPO_ROOT}/.gitignore"
+PROJECT_NAME="$(basename "${REPO_ROOT}")"
+SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
+ENV_FILE="${SECRETS_DIR}/secrets.env"
+
+mkdir -p "${SECRETS_DIR}"
+chmod 700 "${SECRETS_DIR}"
+touch "${ENV_FILE}"
+chmod 600 "${ENV_FILE}"
 
 if [[ ! -f "${DENYLIST_FILE}" ]]; then
   echo "Missing denylist: ${DENYLIST_FILE}" >&2
@@ -76,30 +82,18 @@ if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   unset password
   unset password_confirm
 
-  # Escape $ for Docker Compose .env interpolation.
-  VSCODE_PASSWORD_HASH_ESCAPED="$(
-    printf '%s' "${VSCODE_PASSWORD_HASH}" | sed 's/\$/$$/g'
-  )"
-
   if [[ -f "${ENV_FILE}" ]] && grep -q '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}"; then
     tmp_env="$(mktemp)"
 
     grep -v '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" >"${tmp_env}" || true
-    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH_ESCAPED}" >>"${tmp_env}"
+    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH}" >>"${tmp_env}"
 
     mv "${tmp_env}" "${ENV_FILE}"
   else
-    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH_ESCAPED}" >>"${ENV_FILE}"
+    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH}" >>"${ENV_FILE}"
   fi
 
   unset VSCODE_PASSWORD_HASH
-  unset VSCODE_PASSWORD_HASH_ESCAPED
-fi
-
-# Ensure the local environment file cannot be committed.
-if ! grep -qxF '.devcontainer/.env' "${GITIGNORE_FILE}" 2>/dev/null; then
-  printf '\n.devcontainer/.env\n' >>"${GITIGNORE_FILE}"
-  echo "Added .devcontainer/.env to .gitignore"
 fi
 
 # Configure the GitHub token used by mise during the image build.
