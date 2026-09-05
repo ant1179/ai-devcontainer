@@ -28,7 +28,9 @@ RUN printf '%s\n' \
     && chmod 0440 /etc/sudoers.d/99-vscode-hardened
 
 # Install tools managed by mise using a temporary GitHub token.
-COPY mise.toml /tmp/mise.toml
+COPY --chown=vscode:vscode mise.toml /tmp/mise.toml
+
+USER vscode
 
 RUN --mount=type=secret,id=mise_github_token \
     export MISE_GITHUB_TOKEN="$(cat /run/secrets/mise_github_token)" \

@@ -209,6 +209,11 @@ done <"${DENYLIST_FILE}"
     echo "      - SETGID"
     echo "      - AUDIT_WRITE"
   else
+    echo "    cap_add:"
+    echo "      - SETUID"
+    echo "      - SETGID"
+    echo "      - CHOWN"
+    echo "      - DAC_OVERRIDE"
     echo "    security_opt:"
     echo "      - no-new-privileges:true"
   fi
@@ -220,9 +225,9 @@ done <"${DENYLIST_FILE}"
 
     if [[ -d "${REPO_ROOT}/${relative}" ]]; then
       echo "      - type: tmpfs"
-      echo "        target: /workspace/${relative}"
+      echo "        target: /workspaces/vscode/${relative}"
     else
-      echo "      - /dev/null:/workspace/${relative}:ro"
+      echo "      - /dev/null:/workspaces/vscode/${relative}:ro"
     fi
   done
 

@@ -1,6 +1,11 @@
 {
   "name": "ai-devcontainer",
-  "dockerComposeFile": "docker-compose.yaml",
+  "dockerComposeFile": [
+    "docker-compose.yaml",
+    "docker-compose.generated.yaml"
+  ],
   "service": "app",
-  "postCreateCommand": "scripts/setup"
+  "workspaceFolder": "/workspaces/vscode",
+  "remoteUser": "vscode",
+  "postCreateCommand": "/usr/local/bin/mise trust /workspaces/vscode/mise.toml"
 }
