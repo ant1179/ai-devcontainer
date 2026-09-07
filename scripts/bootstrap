@@ -75,29 +75,75 @@ if [[ "${SECURITY_MODE}" == "hardened" ]]; then
     break
   done
 
-  VSCODE_PASSWORD_HASH="$(
-    printf '%s' "${password}" | openssl passwd -6 -stdin
+  EXISTING_PASSWORD_HASH="$(
+    grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" 2>/dev/null |
+      cut -d= -f2- || true
   )"
 
-  VSCODE_PASSWORD_CACHE_KEY="$(openssl rand -hex 16)"
+  EXISTING_PASSWORD_CACHE_KEY="$(
+    grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" 2>/dev/null |
+      cut -d= -f2- || true
+  )"
+
+  PASSWORD_UNCHANGED=false
+
+  if [[ -n "${EXISTING_PASSWORD_HASH}" ]] &&
+    [[ -n "${EXISTING_PASSWORD_CACHE_KEY}" ]]; then
+
+    EXISTING_SALT="$(
+      printf '%s' "${EXISTING_PASSWORD_HASH}" |
+        cut -d'$' -f3
+    )"
+
+    CHECKED_HASH="$(
+      printf '%s' "${password}" |
+        openssl passwd -6 \
+          -salt "${EXISTING_SALT}" \
+          -stdin
+    )"
+
+    if [[ "${CHECKED_HASH}" == "${EXISTING_PASSWORD_HASH}" ]]; then
+      PASSWORD_UNCHANGED=true
+    fi
+  fi
+
+  if [[ "${PASSWORD_UNCHANGED}" == "true" ]]; then
+    echo "Sudo password: unchanged"
+
+    VSCODE_PASSWORD_HASH="${EXISTING_PASSWORD_HASH}"
+    VSCODE_PASSWORD_CACHE_KEY="${EXISTING_PASSWORD_CACHE_KEY}"
+  else
+    echo "Sudo password: updated"
+
+    VSCODE_PASSWORD_HASH="$(
+      printf '%s' "${password}" |
+        openssl passwd -6 -stdin
+    )"
+
+    VSCODE_PASSWORD_CACHE_KEY="$(openssl rand -hex 16)"
+
+    tmp_env="$(mktemp)"
+
+    grep -v -E '^(VSCODE_PASSWORD_HASH|VSCODE_PASSWORD_CACHE_KEY)=' \
+      "${ENV_FILE}" >"${tmp_env}" || true
+
+    printf 'VSCODE_PASSWORD_HASH=%s\n' \
+      "${VSCODE_PASSWORD_HASH}" >>"${tmp_env}"
+
+    printf 'VSCODE_PASSWORD_CACHE_KEY=%s\n' \
+      "${VSCODE_PASSWORD_CACHE_KEY}" >>"${tmp_env}"
+
+    mv "${tmp_env}" "${ENV_FILE}"
+    chmod 600 "${ENV_FILE}"
+  fi
 
   unset password
   unset password_confirm
-
-  tmp_env="$(mktemp)"
-
-  grep -v -E '^(VSCODE_PASSWORD_HASH|VSCODE_PASSWORD_CACHE_KEY)=' \
-    "${ENV_FILE}" >"${tmp_env}" || true
-
-  printf 'VSCODE_PASSWORD_HASH=%s\n' \
-    "${VSCODE_PASSWORD_HASH}" >>"${tmp_env}"
-
-  printf 'VSCODE_PASSWORD_CACHE_KEY=%s\n' \
-    "${VSCODE_PASSWORD_CACHE_KEY}" >>"${tmp_env}"
-
-  mv "${tmp_env}" "${ENV_FILE}"
-  chmod 600 "${ENV_FILE}"
-
+  unset EXISTING_PASSWORD_HASH
+  unset EXISTING_PASSWORD_CACHE_KEY
+  unset EXISTING_SALT
+  unset CHECKED_HASH
+  unset PASSWORD_UNCHANGED
   unset VSCODE_PASSWORD_HASH
   unset VSCODE_PASSWORD_CACHE_KEY
 fi
@@ -121,16 +167,13 @@ else
     break
   done
 
-  if [[ -f "${ENV_FILE}" ]]; then
-    tmp_env="$(mktemp)"
+  tmp_env="$(mktemp)"
 
-    grep -v '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" >"${tmp_env}" || true
-    printf 'MISE_GITHUB_TOKEN=%s\n' "${github_token}" >>"${tmp_env}"
+  grep -v '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" >"${tmp_env}" || true
+  printf 'MISE_GITHUB_TOKEN=%s\n' "${github_token}" >>"${tmp_env}"
 
-    mv "${tmp_env}" "${ENV_FILE}"
-  else
-    printf 'MISE_GITHUB_TOKEN=%s\n' "${github_token}" >"${ENV_FILE}"
-  fi
+  mv "${tmp_env}" "${ENV_FILE}"
+  chmod 600 "${ENV_FILE}"
 
   unset github_token
 
@@ -162,12 +205,14 @@ if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
   exit 1
 fi
 
-if [[ "${SECURITY_MODE}" == "hardened" ]] && [[ -z "${VSCODE_PASSWORD_HASH}" ]]; then
+if [[ "${SECURITY_MODE}" == "hardened" ]] &&
+  [[ -z "${VSCODE_PASSWORD_HASH}" ]]; then
   echo "Missing VSCODE_PASSWORD_HASH." >&2
   exit 1
 fi
 
-if [[ "${SECURITY_MODE}" == "hardened" ]] && [[ -z "${VSCODE_PASSWORD_CACHE_KEY}" ]]; then
+if [[ "${SECURITY_MODE}" == "hardened" ]] &&
+  [[ -z "${VSCODE_PASSWORD_CACHE_KEY}" ]]; then
   echo "Missing VSCODE_PASSWORD_CACHE_KEY." >&2
   exit 1
 fi
