@@ -79,21 +79,27 @@ if [[ "${SECURITY_MODE}" == "hardened" ]]; then
     printf '%s' "${password}" | openssl passwd -6 -stdin
   )"
 
+  VSCODE_PASSWORD_CACHE_KEY="$(openssl rand -hex 16)"
+
   unset password
   unset password_confirm
 
-  if [[ -f "${ENV_FILE}" ]] && grep -q '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}"; then
-    tmp_env="$(mktemp)"
+  tmp_env="$(mktemp)"
 
-    grep -v '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" >"${tmp_env}" || true
-    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH}" >>"${tmp_env}"
+  grep -v -E '^(VSCODE_PASSWORD_HASH|VSCODE_PASSWORD_CACHE_KEY)=' \
+    "${ENV_FILE}" >"${tmp_env}" || true
 
-    mv "${tmp_env}" "${ENV_FILE}"
-  else
-    printf 'VSCODE_PASSWORD_HASH=%s\n' "${VSCODE_PASSWORD_HASH}" >>"${ENV_FILE}"
-  fi
+  printf 'VSCODE_PASSWORD_HASH=%s\n' \
+    "${VSCODE_PASSWORD_HASH}" >>"${tmp_env}"
+
+  printf 'VSCODE_PASSWORD_CACHE_KEY=%s\n' \
+    "${VSCODE_PASSWORD_CACHE_KEY}" >>"${tmp_env}"
+
+  mv "${tmp_env}" "${ENV_FILE}"
+  chmod 600 "${ENV_FILE}"
 
   unset VSCODE_PASSWORD_HASH
+  unset VSCODE_PASSWORD_CACHE_KEY
 fi
 
 # Configure the GitHub token used by mise during the image build.
@@ -143,8 +149,12 @@ MISE_GITHUB_TOKEN="$(
 
 VSCODE_PASSWORD_HASH="$(
   grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" |
-    cut -d= -f2- |
-    sed 's/\$\$/\$/g'
+    cut -d= -f2-
+)"
+
+VSCODE_PASSWORD_CACHE_KEY="$(
+  grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" |
+    cut -d= -f2-
 )"
 
 if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
@@ -157,12 +167,13 @@ if [[ "${SECURITY_MODE}" == "hardened" ]] && [[ -z "${VSCODE_PASSWORD_HASH}" ]];
   exit 1
 fi
 
+if [[ "${SECURITY_MODE}" == "hardened" ]] && [[ -z "${VSCODE_PASSWORD_CACHE_KEY}" ]]; then
+  echo "Missing VSCODE_PASSWORD_CACHE_KEY." >&2
+  exit 1
+fi
+
 echo
 echo "Building devcontainer image..."
-
-VSCODE_PASSWORD_CACHE_KEY="$(
-  printf '%s' "${VSCODE_PASSWORD_HASH}" | sha256sum | cut -d' ' -f1
-)"
 
 MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
   VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
@@ -176,6 +187,7 @@ MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
 
 unset MISE_GITHUB_TOKEN
 unset VSCODE_PASSWORD_HASH
+unset VSCODE_PASSWORD_CACHE_KEY
 
 echo "Image built: ${IMAGE_NAME}"
 
