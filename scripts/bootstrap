@@ -164,15 +164,22 @@ echo "Security mode: ${SECURITY_MODE}"
 echo
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
-
   setup_ssh_agent
 
+  # Make the dedicated SSH agent available to processes
+  # launched later by this bootstrap.
+  # shellcheck disable=SC1090
+  source "${SSH_AGENT_ENV}"
+  export SSH_AUTH_SOCK
+  export SSH_AGENT_PID
 else
-
   cleanup_ssh_agent
 
-  echo "SSH agent: disabled (bunkered mode)"
+  # Do not expose the host SSH agent in bunkered mode.
+  unset SSH_AUTH_SOCK || true
+  unset SSH_AGENT_PID || true
 
+  echo "SSH agent: disabled (bunkered mode)"
 fi
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
@@ -392,6 +399,7 @@ done <"${DENYLIST_FILE}"
     echo "      - SETUID"
     echo "      - SETGID"
     echo "      - AUDIT_WRITE"
+    echo "      - DAC_OVERRIDE"
   else
     echo "    cap_add:"
     echo "      - SETUID"
