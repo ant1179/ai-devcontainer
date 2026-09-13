@@ -448,10 +448,12 @@ if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   devpod up "${REPO_ROOT}" \
     --recreate \
     --context "${SECURITY_MODE}" \
+    --ide none \
     --dotfiles git@github.com:ant1179/dotfiles-devpods.git
 else
   echo "Dotfiles: disabled (bunkered mode)"
   devpod up "${REPO_ROOT}" \
     --recreate \
-    --context "${SECURITY_MODE}"
+    --context "${SECURITY_MODE}" \
+    --ide none
 fi
