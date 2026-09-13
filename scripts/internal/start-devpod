@@ -3,7 +3,6 @@
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
-RECREATE="${2:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -13,16 +12,7 @@ if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; t
   exit 1
 fi
 
-if [[ "${RECREATE}" != "true" && "${RECREATE}" != "false" ]]; then
-  echo "Invalid recreate value: ${RECREATE}" >&2
-  exit 1
-fi
-
-DEVPOD_UP_ARGS=(up "${REPO_ROOT}")
-
-if [[ "${RECREATE}" == "true" ]]; then
-  DEVPOD_UP_ARGS+=(--recreate)
-fi
+DEVPOD_UP_ARGS=(up "${REPO_ROOT}" --recreate)
 
 echo
 echo "Starting DevPod (${SECURITY_MODE})..."

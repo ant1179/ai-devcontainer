@@ -58,7 +58,7 @@ up)
 
     # Recreate and fully configure the devcontainer.
     select_security_mode
-    "${INTERNAL_DIR}/bootstrap" "${SECURITY_MODE}" true
+    "${INTERNAL_DIR}/bootstrap" "${SECURITY_MODE}"
   else
     if [[ $# -ne 0 ]]; then
       usage

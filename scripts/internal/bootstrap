@@ -3,7 +3,6 @@
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
-RECREATE="${2:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -22,7 +21,7 @@ devpod context use "${SECURITY_MODE}"
 echo
 
 # Prepare persistent build secrets.
-"${SCRIPT_DIR}/setup-secrets" "${SECURITY_MODE}" "${RECREATE}"
+"${SCRIPT_DIR}/setup-secrets" "${SECURITY_MODE}"
 
 # Configure the dedicated SSH agent.
 "${SCRIPT_DIR}/setup-ssh-agent" "${SECURITY_MODE}"
@@ -45,4 +44,4 @@ fi
 "${SCRIPT_DIR}/generate-compose" "${SECURITY_MODE}"
 
 # Start the DevPod workspace.
-"${SCRIPT_DIR}/start-devpod" "${SECURITY_MODE}" "${RECREATE}"
+"${SCRIPT_DIR}/start-devpod" "${SECURITY_MODE}"
