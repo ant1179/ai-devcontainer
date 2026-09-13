@@ -15,7 +15,7 @@ usage() {
 select_security_mode() {
   echo "Security mode:"
   echo
-  echo "  1) hardened  - sudo available, password required every time"
+  echo "  1) hardened  - sudo available, password required for every sudo command"
   echo "  2) bunkered  - privilege escalation completely disabled"
   echo
 
