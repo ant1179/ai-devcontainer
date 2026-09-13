@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+PROJECT_NAME="$(basename "${REPO_ROOT}")"
+SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
+ENV_FILE="${SECRETS_DIR}/secrets.env"
+
+IMAGE_NAME="ai-devcontainer:local"
+
+if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; then
+  echo "Invalid security mode: ${SECURITY_MODE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "Secrets file not found: ${ENV_FILE}" >&2
+  exit 1
+fi
+
+# Read build credentials without exporting them globally.
+MISE_GITHUB_TOKEN="$(
+  grep '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" 2>/dev/null |
+    cut -d= -f2- || true
+)"
+
+VSCODE_PASSWORD_HASH="$(
+  grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" 2>/dev/null |
+    cut -d= -f2- || true
+)"
+
+VSCODE_PASSWORD_CACHE_KEY="$(
+  grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" 2>/dev/null |
+    cut -d= -f2- || true
+)"
+
+if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
+  echo "Missing MISE_GITHUB_TOKEN." >&2
+  exit 1
+fi
+
+if [[ "${SECURITY_MODE}" == "hardened" ]] &&
+  [[ -z "${VSCODE_PASSWORD_HASH}" ]]; then
+  echo "Missing VSCODE_PASSWORD_HASH." >&2
+  exit 1
+fi
+
+if [[ "${SECURITY_MODE}" == "hardened" ]] &&
+  [[ -z "${VSCODE_PASSWORD_CACHE_KEY}" ]]; then
+  echo "Missing VSCODE_PASSWORD_CACHE_KEY." >&2
+  exit 1
+fi
+
+echo
+echo "Building devcontainer image..."
+
+MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
+  VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
+  podman build \
+  --build-arg VSCODE_PASSWORD_CACHE_KEY="${VSCODE_PASSWORD_CACHE_KEY}" \
+  --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
+  --secret id=vscode_password_hash,env=VSCODE_PASSWORD_HASH \
+  -f "${REPO_ROOT}/.devcontainer/Dockerfile" \
+  -t "${IMAGE_NAME}" \
+  "${REPO_ROOT}"
+
+unset MISE_GITHUB_TOKEN
+unset VSCODE_PASSWORD_HASH
+unset VSCODE_PASSWORD_CACHE_KEY
+
+echo "Image built: ${IMAGE_NAME}"

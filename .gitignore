@@ -1,5 +1,7 @@
 # devcontainer
-*age*
+*.agekey
+age*
+*.age*
 
 # temp directories
 screenshots/

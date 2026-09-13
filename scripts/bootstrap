@@ -3,14 +3,13 @@
 set -euo pipefail
 
 RECREATE="${1:-false}"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
-GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 ENV_FILE="${SECRETS_DIR}/secrets.env"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
-SSH_AGENT_SOCKET="${SECRETS_DIR}/ssh-agent.sock"
 
 mkdir -p "${SECRETS_DIR}"
 chmod 700 "${SECRETS_DIR}"
@@ -21,122 +20,6 @@ if [[ ! -f "${DENYLIST_FILE}" ]]; then
   echo "Missing denylist: ${DENYLIST_FILE}" >&2
   exit 1
 fi
-
-cleanup_ssh_agent() {
-  if [[ ! -f "${SSH_AGENT_ENV}" ]]; then
-    return
-  fi
-
-  OLD_SSH_AGENT_PID="$(
-    grep '^SSH_AGENT_PID=' "${SSH_AGENT_ENV}" 2>/dev/null |
-      cut -d= -f2- || true
-  )"
-
-  if [[ -n "${OLD_SSH_AGENT_PID}" ]] &&
-    kill -0 "${OLD_SSH_AGENT_PID}" 2>/dev/null; then
-
-    PROCESS_NAME="$(
-      ps -p "${OLD_SSH_AGENT_PID}" -o comm= 2>/dev/null || true
-    )"
-
-    if [[ "${PROCESS_NAME}" == *ssh-agent* ]]; then
-      echo "Stopping previous dedicated SSH agent..."
-      kill "${OLD_SSH_AGENT_PID}"
-    fi
-  fi
-
-  rm -f "${SSH_AGENT_SOCKET}"
-  rm -f "${SSH_AGENT_ENV}"
-}
-
-setup_ssh_agent() {
-  cleanup_ssh_agent
-
-  echo
-  echo "Available SSH private keys:"
-  echo
-
-  SSH_KEYS=()
-
-  for key in "${HOME}"/.ssh/*; do
-    [[ -f "${key}" ]] || continue
-
-    case "${key}" in
-    *.pub | known_hosts* | authorized_keys | config)
-      continue
-      ;;
-    esac
-
-    if ssh-keygen -y -f "${key}" >/dev/null 2>&1; then
-      SSH_KEYS+=("${key}")
-    fi
-  done
-
-  if [[ "${#SSH_KEYS[@]}" -eq 0 ]]; then
-    echo "No SSH private keys found."
-    return
-  fi
-
-  i=1
-  for key in "${SSH_KEYS[@]}"; do
-    printf "  %d) %s\n" "${i}" "${key}"
-    i=$((i + 1))
-  done
-
-  echo
-  printf "Select keys to expose [e.g. 1 2, empty for none]: "
-  read -r selection
-
-  if [[ -z "${selection}" ]]; then
-    echo "SSH agent: disabled"
-    return
-  fi
-
-  rm -f "${SSH_AGENT_SOCKET}"
-  AGENT_OUTPUT="$(ssh-agent -a "${SSH_AGENT_SOCKET}" -s)"
-
-  SSH_AUTH_SOCK="$(
-    printf '%s\n' "${AGENT_OUTPUT}" |
-      sed -n 's/^SSH_AUTH_SOCK=\([^;]*\);.*/\1/p'
-  )"
-
-  SSH_AGENT_PID="$(
-    printf '%s\n' "${AGENT_OUTPUT}" |
-      sed -n 's/^SSH_AGENT_PID=\([^;]*\);.*/\1/p'
-  )"
-
-  if [[ -z "${SSH_AUTH_SOCK}" ]] ||
-    [[ -z "${SSH_AGENT_PID}" ]]; then
-    echo "Failed to start dedicated SSH agent." >&2
-    exit 1
-  fi
-
-  for index in ${selection}; do
-    if ! [[ "${index}" =~ ^[0-9]+$ ]] ||
-      ((index < 1 || index > ${#SSH_KEYS[@]})); then
-
-      echo "Invalid SSH key selection: ${index}" >&2
-      kill "${SSH_AGENT_PID}" 2>/dev/null || true
-      exit 1
-    fi
-
-    key="${SSH_KEYS[$((index - 1))]}"
-
-    SSH_AUTH_SOCK="${SSH_AUTH_SOCK}" \
-      ssh-add "${key}"
-  done
-
-  {
-    printf 'SSH_AUTH_SOCK=%s\n' "${SSH_AUTH_SOCK}"
-    printf 'SSH_AGENT_PID=%s\n' "${SSH_AGENT_PID}"
-  } >"${SSH_AGENT_ENV}"
-
-  chmod 600 "${SSH_AGENT_ENV}"
-
-  echo
-  echo "Dedicated SSH agent:"
-  SSH_AUTH_SOCK="${SSH_AUTH_SOCK}" ssh-add -l
-}
 
 echo "Security mode:"
 echo
@@ -169,28 +52,18 @@ echo "Security mode: ${SECURITY_MODE}"
 devpod context use "${SECURITY_MODE}"
 echo
 
-if [[ "${SECURITY_MODE}" == "hardened" ]]; then
-  setup_ssh_agent
+# Configure the dedicated SSH agent for the selected security mode.
+"${SCRIPT_DIR}/setup-ssh-agent" "${SECURITY_MODE}"
 
-  if [[ -f "${SSH_AGENT_ENV}" ]]; then
-    # Make the dedicated SSH agent available to processes
-    # launched later by this bootstrap.
-    # shellcheck disable=SC1090
-    source "${SSH_AGENT_ENV}"
-    export SSH_AUTH_SOCK
-    export SSH_AGENT_PID
-  else
-    unset SSH_AUTH_SOCK || true
-    unset SSH_AGENT_PID || true
-  fi
+if [[ "${SECURITY_MODE}" == "hardened" && -f "${SSH_AGENT_ENV}" ]]; then
+  # Make the dedicated SSH agent available to DevPod.
+  # shellcheck disable=SC1090
+  source "${SSH_AGENT_ENV}"
+  export SSH_AUTH_SOCK
+  export SSH_AGENT_PID
 else
-  cleanup_ssh_agent
-
-  # Do not expose the host SSH agent in bunkered mode.
   unset SSH_AUTH_SOCK || true
   unset SSH_AGENT_PID || true
-
-  echo "SSH agent: disabled (bunkered mode)"
 fi
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
@@ -327,59 +200,8 @@ fi
 
 chmod 600 "${ENV_FILE}"
 
-IMAGE_NAME="ai-devcontainer:local"
-
-# Read build credentials without exporting them globally.
-MISE_GITHUB_TOKEN="$(
-  grep '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" |
-    cut -d= -f2-
-)"
-
-VSCODE_PASSWORD_HASH="$(
-  grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" |
-    cut -d= -f2-
-)"
-
-VSCODE_PASSWORD_CACHE_KEY="$(
-  grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" |
-    cut -d= -f2-
-)"
-
-if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
-  echo "Missing MISE_GITHUB_TOKEN." >&2
-  exit 1
-fi
-
-if [[ "${SECURITY_MODE}" == "hardened" ]] &&
-  [[ -z "${VSCODE_PASSWORD_HASH}" ]]; then
-  echo "Missing VSCODE_PASSWORD_HASH." >&2
-  exit 1
-fi
-
-if [[ "${SECURITY_MODE}" == "hardened" ]] &&
-  [[ -z "${VSCODE_PASSWORD_CACHE_KEY}" ]]; then
-  echo "Missing VSCODE_PASSWORD_CACHE_KEY." >&2
-  exit 1
-fi
-
-echo
-echo "Building devcontainer image..."
-
-MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
-  VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
-  podman build \
-  --build-arg VSCODE_PASSWORD_CACHE_KEY="${VSCODE_PASSWORD_CACHE_KEY}" \
-  --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
-  --secret id=vscode_password_hash,env=VSCODE_PASSWORD_HASH \
-  -f "${REPO_ROOT}/.devcontainer/Dockerfile" \
-  -t "${IMAGE_NAME}" \
-  "${REPO_ROOT}"
-
-unset MISE_GITHUB_TOKEN
-unset VSCODE_PASSWORD_HASH
-unset VSCODE_PASSWORD_CACHE_KEY
-
-echo "Image built: ${IMAGE_NAME}"
+# Build the devcontainer image.
+"${SCRIPT_DIR}/build-image" "${SECURITY_MODE}"
 
 # Generate the security-specific Compose configuration.
 "${SCRIPT_DIR}/generate-compose" "${SECURITY_MODE}"
