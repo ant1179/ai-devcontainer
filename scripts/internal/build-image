@@ -29,15 +29,20 @@ MISE_GITHUB_TOKEN="$(
     cut -d= -f2- || true
 )"
 
-VSCODE_PASSWORD_HASH="$(
-  grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" 2>/dev/null |
-    cut -d= -f2- || true
-)"
+VSCODE_PASSWORD_HASH=""
+VSCODE_PASSWORD_CACHE_KEY=""
 
-VSCODE_PASSWORD_CACHE_KEY="$(
-  grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" 2>/dev/null |
-    cut -d= -f2- || true
-)"
+if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+  VSCODE_PASSWORD_HASH="$(
+    grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" 2>/dev/null |
+      cut -d= -f2- || true
+  )"
+
+  VSCODE_PASSWORD_CACHE_KEY="$(
+    grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" 2>/dev/null |
+      cut -d= -f2- || true
+  )"
+fi
 
 if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
   echo "Missing MISE_GITHUB_TOKEN." >&2
@@ -62,6 +67,7 @@ echo "Building devcontainer image..."
 MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
   VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
   podman build \
+  --build-arg SECURITY_MODE="${SECURITY_MODE}" \
   --build-arg VSCODE_PASSWORD_CACHE_KEY="${VSCODE_PASSWORD_CACHE_KEY}" \
   --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
   --secret id=vscode_password_hash,env=VSCODE_PASSWORD_HASH \

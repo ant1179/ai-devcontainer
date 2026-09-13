@@ -12,8 +12,6 @@ if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; t
   exit 1
 fi
 
-DEVPOD_UP_ARGS=(up "${REPO_ROOT}" --recreate)
-
 echo
 echo "Starting DevPod (${SECURITY_MODE})..."
 echo
@@ -21,14 +19,16 @@ echo
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   echo "Dotfiles: enabled"
 
-  devpod "${DEVPOD_UP_ARGS[@]}" \
+  devpod up "${REPO_ROOT}" \
+    --recreate \
     --context "${SECURITY_MODE}" \
     --ide none \
     --dotfiles git@github.com:ant1179/dotfiles-devpods.git
 else
   echo "Dotfiles: disabled (bunkered mode)"
 
-  devpod "${DEVPOD_UP_ARGS[@]}" \
+  devpod up "${REPO_ROOT}" \
+    --recreate \
     --context "${SECURITY_MODE}" \
     --ide none
 fi

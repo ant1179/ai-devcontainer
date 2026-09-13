@@ -17,10 +17,15 @@ RUN rm -f /etc/sudoers.d/vscode \
 # Set vscode password from a pre-computed hash.
 ARG VSCODE_PASSWORD_CACHE_KEY
 
+ARG SECURITY_MODE
+ARG VSCODE_PASSWORD_CACHE_KEY
+
 RUN --mount=type=secret,id=vscode_password_hash \
-    test -n "${VSCODE_PASSWORD_CACHE_KEY}" \
-    && test -s /run/secrets/vscode_password_hash \
-    && usermod --password "$(cat /run/secrets/vscode_password_hash)" vscode
+    if [ "${SECURITY_MODE}" = "hardened" ]; then \
+        test -n "${VSCODE_PASSWORD_CACHE_KEY}" \
+        && test -s /run/secrets/vscode_password_hash \
+        && usermod --password "$(cat /run/secrets/vscode_password_hash)" vscode; \
+    fi
 
 # Always require the sudo password and do not cache authentication.
 RUN printf '%s\n' \
