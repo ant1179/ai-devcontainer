@@ -8,13 +8,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
-ENV_FILE="${SECRETS_DIR}/secrets.env"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
-
-mkdir -p "${SECRETS_DIR}"
-chmod 700 "${SECRETS_DIR}"
-touch "${ENV_FILE}"
-chmod 600 "${ENV_FILE}"
 
 if [[ ! -f "${DENYLIST_FILE}" ]]; then
   echo "Missing denylist: ${DENYLIST_FILE}" >&2
@@ -48,9 +42,13 @@ done
 
 echo
 echo "Security mode: ${SECURITY_MODE}"
+
 # Make the selected security mode the active DevPod context.
 devpod context use "${SECURITY_MODE}"
 echo
+
+# Prepare persistent build secrets.
+"${SCRIPT_DIR}/setup-secrets" "${SECURITY_MODE}"
 
 # Configure the dedicated SSH agent for the selected security mode.
 "${SCRIPT_DIR}/setup-ssh-agent" "${SECURITY_MODE}"
@@ -65,140 +63,6 @@ else
   unset SSH_AUTH_SOCK || true
   unset SSH_AGENT_PID || true
 fi
-
-if [[ "${SECURITY_MODE}" == "hardened" ]]; then
-  while true; do
-    printf "Sudo password: "
-    stty -echo
-    read -r password
-    stty echo
-    echo
-
-    printf "Confirm sudo password: "
-    stty -echo
-    read -r password_confirm
-    stty echo
-    echo
-
-    if [[ "${password}" != "${password_confirm}" ]]; then
-      echo "Passwords do not match."
-      continue
-    fi
-
-    if [[ -z "${password}" ]]; then
-      echo "Password cannot be empty."
-      continue
-    fi
-
-    break
-  done
-
-  EXISTING_PASSWORD_HASH="$(
-    grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" 2>/dev/null |
-      cut -d= -f2- || true
-  )"
-
-  EXISTING_PASSWORD_CACHE_KEY="$(
-    grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" 2>/dev/null |
-      cut -d= -f2- || true
-  )"
-
-  PASSWORD_UNCHANGED=false
-
-  if [[ -n "${EXISTING_PASSWORD_HASH}" ]] &&
-    [[ -n "${EXISTING_PASSWORD_CACHE_KEY}" ]]; then
-
-    EXISTING_SALT="$(
-      printf '%s' "${EXISTING_PASSWORD_HASH}" |
-        cut -d'$' -f3
-    )"
-
-    CHECKED_HASH="$(
-      printf '%s' "${password}" |
-        openssl passwd -6 \
-          -salt "${EXISTING_SALT}" \
-          -stdin
-    )"
-
-    if [[ "${CHECKED_HASH}" == "${EXISTING_PASSWORD_HASH}" ]]; then
-      PASSWORD_UNCHANGED=true
-    fi
-  fi
-
-  if [[ "${PASSWORD_UNCHANGED}" == "true" ]]; then
-    echo "Sudo password: unchanged"
-
-    VSCODE_PASSWORD_HASH="${EXISTING_PASSWORD_HASH}"
-    VSCODE_PASSWORD_CACHE_KEY="${EXISTING_PASSWORD_CACHE_KEY}"
-  else
-    echo "Sudo password: updated"
-
-    VSCODE_PASSWORD_HASH="$(
-      printf '%s' "${password}" |
-        openssl passwd -6 -stdin
-    )"
-
-    VSCODE_PASSWORD_CACHE_KEY="$(openssl rand -hex 16)"
-
-    tmp_env="$(mktemp)"
-
-    grep -v -E '^(VSCODE_PASSWORD_HASH|VSCODE_PASSWORD_CACHE_KEY)=' \
-      "${ENV_FILE}" >"${tmp_env}" || true
-
-    printf 'VSCODE_PASSWORD_HASH=%s\n' \
-      "${VSCODE_PASSWORD_HASH}" >>"${tmp_env}"
-
-    printf 'VSCODE_PASSWORD_CACHE_KEY=%s\n' \
-      "${VSCODE_PASSWORD_CACHE_KEY}" >>"${tmp_env}"
-
-    mv "${tmp_env}" "${ENV_FILE}"
-    chmod 600 "${ENV_FILE}"
-  fi
-
-  unset password
-  unset password_confirm
-  unset EXISTING_PASSWORD_HASH
-  unset EXISTING_PASSWORD_CACHE_KEY
-  unset EXISTING_SALT
-  unset CHECKED_HASH
-  unset PASSWORD_UNCHANGED
-  unset VSCODE_PASSWORD_HASH
-  unset VSCODE_PASSWORD_CACHE_KEY
-fi
-
-# Configure the GitHub token used by mise during the image build.
-if grep -q '^MISE_GITHUB_TOKEN=.' "${ENV_FILE}" 2>/dev/null; then
-  echo "GitHub token: already configured"
-else
-  while true; do
-    printf "GitHub token for mise: "
-    stty -echo
-    read -r github_token
-    stty echo
-    echo
-
-    if [[ -z "${github_token}" ]]; then
-      echo "Token cannot be empty."
-      continue
-    fi
-
-    break
-  done
-
-  tmp_env="$(mktemp)"
-
-  grep -v '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" >"${tmp_env}" || true
-  printf 'MISE_GITHUB_TOKEN=%s\n' "${github_token}" >>"${tmp_env}"
-
-  mv "${tmp_env}" "${ENV_FILE}"
-  chmod 600 "${ENV_FILE}"
-
-  unset github_token
-
-  echo "GitHub token: configured"
-fi
-
-chmod 600 "${ENV_FILE}"
 
 # Build the devcontainer image.
 "${SCRIPT_DIR}/build-image" "${SECURITY_MODE}"
