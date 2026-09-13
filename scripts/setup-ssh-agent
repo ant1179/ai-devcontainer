@@ -21,25 +21,26 @@ mkdir -p "${SECRETS_DIR}"
 chmod 700 "${SECRETS_DIR}"
 
 cleanup_ssh_agent() {
-  if [[ ! -f "${SSH_AGENT_ENV}" ]]; then
-    return
-  fi
+  local old_ssh_agent_pid=""
+  local process_name=""
 
-  OLD_SSH_AGENT_PID="$(
-    grep '^SSH_AGENT_PID=' "${SSH_AGENT_ENV}" 2>/dev/null |
-      cut -d= -f2- || true
-  )"
-
-  if [[ -n "${OLD_SSH_AGENT_PID}" ]] &&
-    kill -0 "${OLD_SSH_AGENT_PID}" 2>/dev/null; then
-
-    PROCESS_NAME="$(
-      ps -p "${OLD_SSH_AGENT_PID}" -o comm= 2>/dev/null || true
+  if [[ -f "${SSH_AGENT_ENV}" ]]; then
+    old_ssh_agent_pid="$(
+      grep '^SSH_AGENT_PID=' "${SSH_AGENT_ENV}" 2>/dev/null |
+        cut -d= -f2- || true
     )"
 
-    if [[ "${PROCESS_NAME}" == *ssh-agent* ]]; then
-      echo "Stopping previous dedicated SSH agent..."
-      kill "${OLD_SSH_AGENT_PID}"
+    if [[ -n "${old_ssh_agent_pid}" ]] &&
+      kill -0 "${old_ssh_agent_pid}" 2>/dev/null; then
+
+      process_name="$(
+        ps -p "${old_ssh_agent_pid}" -o comm= 2>/dev/null || true
+      )"
+
+      if [[ "${process_name}" == *ssh-agent* ]]; then
+        echo "Stopping previous dedicated SSH agent..."
+        kill "${old_ssh_agent_pid}"
+      fi
     fi
   fi
 
@@ -48,92 +49,80 @@ cleanup_ssh_agent() {
 }
 
 setup_ssh_agent() {
+  local ssh_dir="${HOME}/.ssh"
+  local private_keys=()
+  local key
+  local selection
+  local selected_index
+
   cleanup_ssh_agent
 
-  echo
-  echo "Available SSH private keys:"
-  echo
+  if [[ ! -d "${ssh_dir}" ]]; then
+    echo "SSH directory not found: ${ssh_dir}" >&2
+    exit 1
+  fi
 
-  SSH_KEYS=()
-
-  for key in "${HOME}"/.ssh/*; do
-    [[ -f "${key}" ]] || continue
-
-    case "${key}" in
-    *.pub | known_hosts* | authorized_keys | config)
+  while IFS= read -r key; do
+    case "$(basename "${key}")" in
+    *.pub | known_hosts | known_hosts.old | authorized_keys | config)
       continue
       ;;
     esac
 
     if ssh-keygen -y -f "${key}" >/dev/null 2>&1; then
-      SSH_KEYS+=("${key}")
+      private_keys+=("${key}")
     fi
-  done
+  done < <(find "${ssh_dir}" -maxdepth 1 -type f | sort)
 
-  if [[ "${#SSH_KEYS[@]}" -eq 0 ]]; then
+  if [[ ${#private_keys[@]} -eq 0 ]]; then
     echo "No SSH private keys found."
     return
   fi
 
-  i=1
-  for key in "${SSH_KEYS[@]}"; do
-    printf "  %d) %s\n" "${i}" "${key}"
-    i=$((i + 1))
+  echo
+  echo "Available SSH private keys:"
+  echo
+
+  for i in "${!private_keys[@]}"; do
+    printf "  %d) %s\n" "$((i + 1))" "${private_keys[$i]}"
   done
 
   echo
-  printf "Select keys to expose [e.g. 1 2, empty for none]: "
-  read -r selection
+  read -rp "Select keys to expose to the devcontainer (e.g. 1 2, empty for none): " selection
 
   if [[ -z "${selection}" ]]; then
-    echo "SSH agent: disabled"
+    echo "No SSH key selected."
     return
   fi
 
-  rm -f "${SSH_AGENT_SOCKET}"
-  AGENT_OUTPUT="$(ssh-agent -a "${SSH_AGENT_SOCKET}" -s)"
-
-  SSH_AUTH_SOCK="$(
-    printf '%s\n' "${AGENT_OUTPUT}" |
-      sed -n 's/^SSH_AUTH_SOCK=\([^;]*\);.*/\1/p'
-  )"
-
-  SSH_AGENT_PID="$(
-    printf '%s\n' "${AGENT_OUTPUT}" |
-      sed -n 's/^SSH_AGENT_PID=\([^;]*\);.*/\1/p'
-  )"
-
-  if [[ -z "${SSH_AUTH_SOCK}" ]] ||
-    [[ -z "${SSH_AGENT_PID}" ]]; then
-    echo "Failed to start dedicated SSH agent." >&2
-    exit 1
-  fi
-
-  for index in ${selection}; do
-    if ! [[ "${index}" =~ ^[0-9]+$ ]] ||
-      ((index < 1 || index > ${#SSH_KEYS[@]})); then
-
-      echo "Invalid SSH key selection: ${index}" >&2
-      kill "${SSH_AGENT_PID}" 2>/dev/null || true
-      exit 1
-    fi
-
-    key="${SSH_KEYS[$((index - 1))]}"
-
-    SSH_AUTH_SOCK="${SSH_AUTH_SOCK}" \
-      ssh-add "${key}"
-  done
+  eval "$(ssh-agent -a "${SSH_AGENT_SOCKET}" -s)" >/dev/null
 
   {
-    printf 'SSH_AUTH_SOCK=%s\n' "${SSH_AUTH_SOCK}"
-    printf 'SSH_AGENT_PID=%s\n' "${SSH_AGENT_PID}"
+    echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}"
+    echo "SSH_AGENT_PID=${SSH_AGENT_PID}"
   } >"${SSH_AGENT_ENV}"
 
   chmod 600 "${SSH_AGENT_ENV}"
 
+  for selected_index in ${selection}; do
+    if ! [[ "${selected_index}" =~ ^[0-9]+$ ]]; then
+      echo "Invalid selection: ${selected_index}" >&2
+      cleanup_ssh_agent
+      exit 1
+    fi
+
+    if ((selected_index < 1 || selected_index > ${#private_keys[@]})); then
+      echo "Invalid selection: ${selected_index}" >&2
+      cleanup_ssh_agent
+      exit 1
+    fi
+
+    ssh-add "${private_keys[$((selected_index - 1))]}"
+  done
+
   echo
-  echo "Dedicated SSH agent:"
-  SSH_AUTH_SOCK="${SSH_AUTH_SOCK}" ssh-add -l
+  echo "SSH keys exposed to the devcontainer:"
+  ssh-add -l
 }
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then

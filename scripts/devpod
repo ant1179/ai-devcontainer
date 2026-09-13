@@ -2,29 +2,34 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
 SSH_AGENT_SOCKET="${SECRETS_DIR}/ssh-agent.sock"
 
 cleanup_ssh_agent() {
+  local old_ssh_agent_pid=""
+  local process_name=""
+
   if [[ -f "${SSH_AGENT_ENV}" ]]; then
-    SSH_AGENT_PID="$(
+    old_ssh_agent_pid="$(
       grep '^SSH_AGENT_PID=' "${SSH_AGENT_ENV}" 2>/dev/null |
         cut -d= -f2- || true
     )"
 
-    if [[ -n "${SSH_AGENT_PID}" ]] &&
-      kill -0 "${SSH_AGENT_PID}" 2>/dev/null; then
+    if [[ -n "${old_ssh_agent_pid}" ]] &&
+      kill -0 "${old_ssh_agent_pid}" 2>/dev/null; then
 
-      PROCESS_NAME="$(
-        ps -p "${SSH_AGENT_PID}" -o comm= 2>/dev/null || true
+      process_name="$(
+        ps -p "${old_ssh_agent_pid}" -o comm= 2>/dev/null || true
       )"
 
-      if [[ "${PROCESS_NAME}" == *ssh-agent* ]]; then
+      if [[ "${process_name}" == *ssh-agent* ]]; then
         echo "Stopping dedicated SSH agent..."
-        kill "${SSH_AGENT_PID}"
+        kill "${old_ssh_agent_pid}"
       fi
     fi
   fi

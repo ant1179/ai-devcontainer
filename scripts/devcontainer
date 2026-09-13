@@ -11,6 +11,36 @@ usage() {
   echo "  $0 delete"
 }
 
+select_security_mode() {
+  echo "Security mode:"
+  echo
+  echo "  1) hardened  - sudo available, password required every time"
+  echo "  2) bunkered  - privilege escalation completely disabled"
+  echo
+
+  while true; do
+    printf "Select mode [1/2]: "
+    read -r choice
+
+    case "${choice}" in
+    1)
+      SECURITY_MODE="hardened"
+      break
+      ;;
+    2)
+      SECURITY_MODE="bunkered"
+      break
+      ;;
+    *)
+      echo "Invalid choice."
+      ;;
+    esac
+  done
+
+  echo
+  echo "Security mode: ${SECURITY_MODE}"
+}
+
 command="${1:-}"
 
 case "${command}" in
@@ -29,7 +59,9 @@ up)
     exit 1
   fi
 
-  "${SCRIPT_DIR}/bootstrap" "${RECREATE}"
+  select_security_mode
+
+  "${SCRIPT_DIR}/bootstrap" "${SECURITY_MODE}" "${RECREATE}"
   ;;
 
 ssh)

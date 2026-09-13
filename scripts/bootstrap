@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-RECREATE="${1:-false}"
+SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
+RECREATE="${2:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -11,46 +12,23 @@ PROJECT_NAME="$(basename "${REPO_ROOT}")"
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
 
-echo "Security mode:"
-echo
-echo "  1) hardened  - sudo available, password required every time"
-echo "  2) bunkered  - privilege escalation completely disabled"
-echo
-
-while true; do
-  printf "Select mode [1/2]: "
-  read -r choice
-
-  case "${choice}" in
-  1)
-    SECURITY_MODE="hardened"
-    break
-    ;;
-  2)
-    SECURITY_MODE="bunkered"
-    break
-    ;;
-  *)
-    echo "Invalid choice."
-    ;;
-  esac
-done
-
-echo
-echo "Security mode: ${SECURITY_MODE}"
+if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; then
+  echo "Invalid security mode: ${SECURITY_MODE}" >&2
+  exit 1
+fi
 
 # Make the selected security mode the active DevPod context.
 devpod context use "${SECURITY_MODE}"
 echo
 
 # Prepare persistent build secrets.
-"${SCRIPT_DIR}/setup-secrets" "${SECURITY_MODE}"
+"${SCRIPT_DIR}/setup-secrets" "${SECURITY_MODE}" "${RECREATE}"
 
-# Configure the dedicated SSH agent for the selected security mode.
+# Configure the dedicated SSH agent.
 "${SCRIPT_DIR}/setup-ssh-agent" "${SECURITY_MODE}"
 
+# Make the dedicated SSH agent available to DevPod in hardened mode.
 if [[ "${SECURITY_MODE}" == "hardened" && -f "${SSH_AGENT_ENV}" ]]; then
-  # Make the dedicated SSH agent available to DevPod.
   # shellcheck disable=SC1090
   source "${SSH_AGENT_ENV}"
   export SSH_AUTH_SOCK
@@ -65,8 +43,6 @@ fi
 
 # Generate the security-specific Compose configuration.
 "${SCRIPT_DIR}/generate-compose" "${SECURITY_MODE}"
-
-echo "Bootstrap configuration complete."
 
 # Start the DevPod workspace.
 "${SCRIPT_DIR}/start-devpod" "${SECURITY_MODE}" "${RECREATE}"
