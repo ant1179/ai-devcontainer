@@ -164,6 +164,8 @@ done
 
 echo
 echo "Security mode: ${SECURITY_MODE}"
+# Make the selected security mode the active DevPod context.
+devpod context use "${SECURITY_MODE}"
 echo
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
