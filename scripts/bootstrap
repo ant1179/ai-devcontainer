@@ -443,7 +443,15 @@ echo
 echo "Starting DevPod (${SECURITY_MODE})..."
 echo
 
-devpod up "${REPO_ROOT}" \
-  --recreate \
-  --context "${SECURITY_MODE}" \
-  --dotfiles git@github.com:ant1179/dotfiles-devpods.git
+if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+  echo "Dotfiles: enabled"
+  devpod up "${REPO_ROOT}" \
+    --recreate \
+    --context "${SECURITY_MODE}" \
+    --dotfiles git@github.com:ant1179/dotfiles-devpods.git
+else
+  echo "Dotfiles: disabled (bunkered mode)"
+  devpod up "${REPO_ROOT}" \
+    --recreate \
+    --context "${SECURITY_MODE}"
+fi
