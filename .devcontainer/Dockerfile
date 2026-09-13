@@ -32,6 +32,11 @@ RUN printf '%s\n' \
 # Install tools managed by mise using a temporary GitHub token.
 COPY --chown=vscode:vscode mise.toml /tmp/mise.toml
 
+# Set zsh as default shell
+RUN rm -f /etc/sudoers.d/vscode \
+    && usermod -aG sudo vscode \
+    && usermod -s "$(command -v zsh)" vscode
+
 USER vscode
 
 RUN --mount=type=secret,id=mise_github_token,uid=1000,gid=1000,mode=0400 \

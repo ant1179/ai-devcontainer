@@ -446,4 +446,4 @@ echo
 devpod up "${REPO_ROOT}" \
   --recreate \
   --context "${SECURITY_MODE}" \
-  --dotfiles https://github.com/ant1179/dotfiles-devpods
+  --dotfiles git@github.com:ant1179/dotfiles-devpods.git

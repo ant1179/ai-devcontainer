@@ -45,4 +45,8 @@ if [[ "${1:-}" == "delete" ]]; then
   exit 0
 fi
 
+if [[ "${1:-}" == "ssh" ]]; then
+  exec devpod "$@" --workdir /workspaces/vscode
+fi
+
 exec devpod "$@"
