@@ -7,31 +7,43 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   echo "Usage:"
   echo "  $0 up [--recreate]"
+  echo "  $0 ssh"
 }
 
 command="${1:-}"
 
 case "${command}" in
-  up)
+up)
+  shift
+
+  RECREATE=false
+
+  if [[ "${1:-}" == "--recreate" ]]; then
+    RECREATE=true
     shift
+  fi
 
-    RECREATE=false
-
-    if [[ "${1:-}" == "--recreate" ]]; then
-      RECREATE=true
-      shift
-    fi
-
-    if [[ $# -ne 0 ]]; then
-      usage
-      exit 1
-    fi
-
-    "${SCRIPT_DIR}/bootstrap" "${RECREATE}"
-    ;;
-
-  *)
+  if [[ $# -ne 0 ]]; then
     usage
     exit 1
-    ;;
+  fi
+
+  "${SCRIPT_DIR}/bootstrap" "${RECREATE}"
+  ;;
+
+ssh)
+  shift
+
+  if [[ $# -ne 0 ]]; then
+    usage
+    exit 1
+  fi
+
+  "${SCRIPT_DIR}/devpod" ssh .
+  ;;
+
+*)
+  usage
+  exit 1
+  ;;
 esac
