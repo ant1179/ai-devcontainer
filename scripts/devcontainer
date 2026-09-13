@@ -3,6 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INTERNAL_DIR="${SCRIPT_DIR}/internal"
 
 usage() {
   echo "Usage:"
@@ -47,21 +48,26 @@ case "${command}" in
 up)
   shift
 
-  RECREATE=false
-
   if [[ "${1:-}" == "--recreate" ]]; then
-    RECREATE=true
     shift
+
+    if [[ $# -ne 0 ]]; then
+      usage
+      exit 1
+    fi
+
+    # Recreate and fully configure the devcontainer.
+    select_security_mode
+    "${INTERNAL_DIR}/bootstrap" "${SECURITY_MODE}" true
+  else
+    if [[ $# -ne 0 ]]; then
+      usage
+      exit 1
+    fi
+
+    # Start the existing devcontainer without changing its configuration.
+    "${INTERNAL_DIR}/devpod" up . --ide none
   fi
-
-  if [[ $# -ne 0 ]]; then
-    usage
-    exit 1
-  fi
-
-  select_security_mode
-
-  "${SCRIPT_DIR}/internal/bootstrap" "${SECURITY_MODE}" "${RECREATE}"
   ;;
 
 ssh)
@@ -72,7 +78,8 @@ ssh)
     exit 1
   fi
 
-  "${SCRIPT_DIR}/internal/devpod" ssh .
+  # Connect to the existing devcontainer without changing its configuration.
+  "${INTERNAL_DIR}/devpod" ssh .
   ;;
 
 delete)
@@ -83,7 +90,7 @@ delete)
     exit 1
   fi
 
-  "${SCRIPT_DIR}/devpod" delete .
+  "${INTERNAL_DIR}/devpod" delete .
   ;;
 
 *)

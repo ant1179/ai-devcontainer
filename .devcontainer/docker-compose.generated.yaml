@@ -5,10 +5,8 @@ services:
     cap_add:
       - SETUID
       - SETGID
-      - CHOWN
+      - AUDIT_WRITE
       - DAC_OVERRIDE
-    security_opt:
-      - no-new-privileges:true
     volumes:
       - type: tmpfs
         target: /workspaces/vscode/.devcontainer
@@ -18,3 +16,5 @@ services:
         target: /workspaces/vscode/scripts
         tmpfs:
           mode: 0700
+      - /dev/null:/workspaces/vscode/scripts/internal/build-image:ro
+      - /dev/null:/workspaces/vscode/scripts/internal/setup-ssh-agent:ro
