@@ -6,14 +6,19 @@ SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
 RECREATE="${2:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; then
   echo "Invalid security mode: ${SECURITY_MODE}" >&2
   exit 1
 fi
 
-DEVPOD_UP_ARGS=()
+if [[ "${RECREATE}" != "true" && "${RECREATE}" != "false" ]]; then
+  echo "Invalid recreate value: ${RECREATE}" >&2
+  exit 1
+fi
+
+DEVPOD_UP_ARGS=(up "${REPO_ROOT}")
 
 if [[ "${RECREATE}" == "true" ]]; then
   DEVPOD_UP_ARGS+=(--recreate)
@@ -26,16 +31,14 @@ echo
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   echo "Dotfiles: enabled"
 
-  devpod up "${REPO_ROOT}" \
-    "${DEVPOD_UP_ARGS[@]}" \
+  devpod "${DEVPOD_UP_ARGS[@]}" \
     --context "${SECURITY_MODE}" \
     --ide none \
     --dotfiles git@github.com:ant1179/dotfiles-devpods.git
 else
   echo "Dotfiles: disabled (bunkered mode)"
 
-  devpod up "${REPO_ROOT}" \
-    "${DEVPOD_UP_ARGS[@]}" \
+  devpod "${DEVPOD_UP_ARGS[@]}" \
     --context "${SECURITY_MODE}" \
     --ide none
 fi

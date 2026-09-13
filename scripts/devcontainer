@@ -61,7 +61,7 @@ up)
 
   select_security_mode
 
-  "${SCRIPT_DIR}/bootstrap" "${SECURITY_MODE}" "${RECREATE}"
+  "${SCRIPT_DIR}/internal/bootstrap" "${SECURITY_MODE}" "${RECREATE}"
   ;;
 
 ssh)
@@ -72,7 +72,7 @@ ssh)
     exit 1
   fi
 
-  "${SCRIPT_DIR}/devpod" ssh .
+  "${SCRIPT_DIR}/internal/devpod" ssh .
   ;;
 
 delete)

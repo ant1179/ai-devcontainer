@@ -5,7 +5,7 @@ set -euo pipefail
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
 GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"

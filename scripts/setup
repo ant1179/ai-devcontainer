@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-set -euo pipefail
-
-cd /workspaces/vscode
-
-/usr/local/bin/mise trust /workspaces/vscode/mise.toml
