@@ -3,17 +3,13 @@
 set -euo pipefail
 
 RECREATE="${1:-false}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
+
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
-
-if [[ ! -f "${DENYLIST_FILE}" ]]; then
-  echo "Missing denylist: ${DENYLIST_FILE}" >&2
-  exit 1
-fi
 
 echo "Security mode:"
 echo
@@ -71,10 +67,6 @@ fi
 "${SCRIPT_DIR}/generate-compose" "${SECURITY_MODE}"
 
 echo "Bootstrap configuration complete."
-
-echo
-echo "Starting DevPod (${SECURITY_MODE})..."
-echo
 
 # Start the DevPod workspace.
 "${SCRIPT_DIR}/start-devpod" "${SECURITY_MODE}" "${RECREATE}"
