@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+RECREATE="${1:-false}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
 GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
@@ -445,17 +446,23 @@ echo
 echo "Starting DevPod (${SECURITY_MODE})..."
 echo
 
+DEVPOD_UP_ARGS=()
+
+if [[ "${RECREATE}" == "true" ]]; then
+  DEVPOD_UP_ARGS+=(--recreate)
+fi
+
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   echo "Dotfiles: enabled"
   devpod up "${REPO_ROOT}" \
-    --recreate \
+    "${DEVPOD_UP_ARGS[@]}" \
     --context "${SECURITY_MODE}" \
     --ide none \
     --dotfiles git@github.com:ant1179/dotfiles-devpods.git
 else
   echo "Dotfiles: disabled (bunkered mode)"
   devpod up "${REPO_ROOT}" \
-    --recreate \
+    "${DEVPOD_UP_ARGS[@]}" \
     --context "${SECURITY_MODE}" \
     --ide none
 fi
