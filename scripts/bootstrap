@@ -9,6 +9,7 @@ PROJECT_NAME="$(basename "${REPO_ROOT}")"
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 ENV_FILE="${SECRETS_DIR}/secrets.env"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
+SSH_AGENT_SOCKET="${SECRETS_DIR}/ssh-agent.sock"
 
 mkdir -p "${SECRETS_DIR}"
 chmod 700 "${SECRETS_DIR}"
@@ -43,6 +44,7 @@ cleanup_ssh_agent() {
     fi
   fi
 
+  rm -f "${SSH_AGENT_SOCKET}"
   rm -f "${SSH_AGENT_ENV}"
 }
 
@@ -89,7 +91,8 @@ setup_ssh_agent() {
     return
   fi
 
-  AGENT_OUTPUT="$(ssh-agent -s)"
+  rm -f "${SSH_AGENT_SOCKET}"
+  AGENT_OUTPUT="$(ssh-agent -a "${SSH_AGENT_SOCKET}" -s)"
 
   SSH_AUTH_SOCK="$(
     printf '%s\n' "${AGENT_OUTPUT}" |
@@ -166,12 +169,17 @@ echo
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   setup_ssh_agent
 
-  # Make the dedicated SSH agent available to processes
-  # launched later by this bootstrap.
-  # shellcheck disable=SC1090
-  source "${SSH_AGENT_ENV}"
-  export SSH_AUTH_SOCK
-  export SSH_AGENT_PID
+  if [[ -f "${SSH_AGENT_ENV}" ]]; then
+    # Make the dedicated SSH agent available to processes
+    # launched later by this bootstrap.
+    # shellcheck disable=SC1090
+    source "${SSH_AGENT_ENV}"
+    export SSH_AUTH_SOCK
+    export SSH_AGENT_PID
+  else
+    unset SSH_AUTH_SOCK || true
+    unset SSH_AGENT_PID || true
+  fi
 else
   cleanup_ssh_agent
 
@@ -430,3 +438,12 @@ done <"${DENYLIST_FILE}"
 echo
 echo "Generated: ${GENERATED_FILE}"
 echo "Bootstrap configuration complete."
+
+echo
+echo "Starting DevPod (${SECURITY_MODE})..."
+echo
+
+devpod up "${REPO_ROOT}" \
+  --recreate \
+  --context "${SECURITY_MODE}" \
+  --dotfiles https://github.com/ant1179/dotfiles-devpods

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_NAME="$(basename "${REPO_ROOT}")"
+SSH_AGENT_SOCKET="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}/ssh-agent.sock"
+
+if [[ -S "${SSH_AGENT_SOCKET}" ]]; then
+  export SSH_AUTH_SOCK="${SSH_AGENT_SOCKET}"
+else
+  unset SSH_AUTH_SOCK || true
+fi
+
+exec devpod "$@"
