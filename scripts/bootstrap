@@ -381,65 +381,9 @@ unset VSCODE_PASSWORD_CACHE_KEY
 
 echo "Image built: ${IMAGE_NAME}"
 
-TMP_MATCHES="$(mktemp)"
-trap 'rm -f "${TMP_MATCHES}"' EXIT
+# Generate the security-specific Compose configuration.
+"${SCRIPT_DIR}/generate-compose" "${SECURITY_MODE}"
 
-while IFS= read -r pattern; do
-  [[ -z "${pattern}" ]] && continue
-  [[ "${pattern}" =~ ^[[:space:]]*# ]] && continue
-
-  (
-    cd "${REPO_ROOT}"
-
-    find . \
-      -path "./.git" -prune \
-      -o -path "./${pattern}" -print
-  ) >>"${TMP_MATCHES}"
-
-done <"${DENYLIST_FILE}"
-
-{
-  echo "services:"
-  echo "  app:"
-
-  echo "    cap_drop:"
-  echo "      - ALL"
-
-  if [[ "${SECURITY_MODE}" == "hardened" ]]; then
-    echo "    cap_add:"
-    echo "      - SETUID"
-    echo "      - SETGID"
-    echo "      - AUDIT_WRITE"
-    echo "      - DAC_OVERRIDE"
-  else
-    echo "    cap_add:"
-    echo "      - SETUID"
-    echo "      - SETGID"
-    echo "      - CHOWN"
-    echo "      - DAC_OVERRIDE"
-    echo "    security_opt:"
-    echo "      - no-new-privileges:true"
-  fi
-
-  echo "    volumes:"
-
-  sort -u "${TMP_MATCHES}" | while IFS= read -r file; do
-    relative="${file#./}"
-
-    if [[ -d "${REPO_ROOT}/${relative}" ]]; then
-      echo "      - type: tmpfs"
-      echo "        target: /workspaces/vscode/${relative}"
-      echo "        tmpfs:"
-      echo "          mode: 0700"
-    else
-      echo "      - /dev/null:/workspaces/vscode/${relative}:ro"
-    fi
-  done
-
-} >"${GENERATED_FILE}"
-
-echo
-echo "Generated: ${GENERATED_FILE}"
 echo "Bootstrap configuration complete."
 
 echo

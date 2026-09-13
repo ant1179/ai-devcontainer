@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+DENYLIST_FILE="${REPO_ROOT}/.devcontainer/ai-denylist"
+GENERATED_FILE="${REPO_ROOT}/.devcontainer/docker-compose.generated.yaml"
+
+if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; then
+  echo "Invalid security mode: ${SECURITY_MODE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${DENYLIST_FILE}" ]]; then
+  echo "Denylist not found: ${DENYLIST_FILE}" >&2
+  exit 1
+fi
+
+TMP_MATCHES="$(mktemp)"
+trap 'rm -f "${TMP_MATCHES}"' EXIT
+
+while IFS= read -r pattern; do
+  [[ -z "${pattern}" ]] && continue
+  [[ "${pattern}" =~ ^[[:space:]]*# ]] && continue
+
+  (
+    cd "${REPO_ROOT}"
+
+    find . \
+      -path "./.git" -prune \
+      -o -path "./${pattern}" -print
+  ) >>"${TMP_MATCHES}"
+
+done <"${DENYLIST_FILE}"
+
+{
+  echo "services:"
+  echo "  app:"
+
+  echo "    cap_drop:"
+  echo "      - ALL"
+
+  if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+    echo "    cap_add:"
+    echo "      - SETUID"
+    echo "      - SETGID"
+    echo "      - AUDIT_WRITE"
+    echo "      - DAC_OVERRIDE"
+  else
+    echo "    cap_add:"
+    echo "      - SETUID"
+    echo "      - SETGID"
+    echo "      - CHOWN"
+    echo "      - DAC_OVERRIDE"
+    echo "    security_opt:"
+    echo "      - no-new-privileges:true"
+  fi
+
+  echo "    volumes:"
+
+  sort -u "${TMP_MATCHES}" | while IFS= read -r file; do
+    relative="${file#./}"
+
+    if [[ -d "${REPO_ROOT}/${relative}" ]]; then
+      echo "      - type: tmpfs"
+      echo "        target: /workspaces/vscode/${relative}"
+      echo "        tmpfs:"
+      echo "          mode: 0700"
+    else
+      echo "      - /dev/null:/workspaces/vscode/${relative}:ro"
+    fi
+  done
+
+} >"${GENERATED_FILE}"
+
+echo
+echo "Generated: ${GENERATED_FILE}"
