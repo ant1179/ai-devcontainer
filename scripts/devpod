@@ -4,12 +4,45 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
-SSH_AGENT_SOCKET="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}/ssh-agent.sock"
+SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
+SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
+SSH_AGENT_SOCKET="${SECRETS_DIR}/ssh-agent.sock"
+
+cleanup_ssh_agent() {
+  if [[ -f "${SSH_AGENT_ENV}" ]]; then
+    SSH_AGENT_PID="$(
+      grep '^SSH_AGENT_PID=' "${SSH_AGENT_ENV}" 2>/dev/null |
+        cut -d= -f2- || true
+    )"
+
+    if [[ -n "${SSH_AGENT_PID}" ]] &&
+      kill -0 "${SSH_AGENT_PID}" 2>/dev/null; then
+
+      PROCESS_NAME="$(
+        ps -p "${SSH_AGENT_PID}" -o comm= 2>/dev/null || true
+      )"
+
+      if [[ "${PROCESS_NAME}" == *ssh-agent* ]]; then
+        echo "Stopping dedicated SSH agent..."
+        kill "${SSH_AGENT_PID}"
+      fi
+    fi
+  fi
+
+  rm -f "${SSH_AGENT_SOCKET}"
+  rm -f "${SSH_AGENT_ENV}"
+}
 
 if [[ -S "${SSH_AGENT_SOCKET}" ]]; then
   export SSH_AUTH_SOCK="${SSH_AGENT_SOCKET}"
 else
   unset SSH_AUTH_SOCK || true
+fi
+
+if [[ "${1:-}" == "delete" ]]; then
+  devpod "$@"
+  cleanup_ssh_agent
+  exit 0
 fi
 
 exec devpod "$@"
