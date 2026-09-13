@@ -8,6 +8,7 @@ usage() {
   echo "Usage:"
   echo "  $0 up [--recreate]"
   echo "  $0 ssh"
+  echo "  $0 delete"
 }
 
 command="${1:-}"
@@ -40,6 +41,17 @@ ssh)
   fi
 
   "${SCRIPT_DIR}/devpod" ssh .
+  ;;
+
+delete)
+  shift
+
+  if [[ $# -ne 0 ]]; then
+    usage
+    exit 1
+  fi
+
+  "${SCRIPT_DIR}/devpod" delete .
   ;;
 
 *)
