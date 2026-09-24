@@ -1,6 +1,6 @@
 services:
   app:
-    image: ai-devcontainer:local
+    image: ${PROJECT_NAME}:local
     command: sleep infinity
 
     volumes:

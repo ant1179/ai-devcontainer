@@ -41,7 +41,7 @@ fi
 "${SCRIPT_DIR}/build-image" "${SECURITY_MODE}"
 
 # Generate the security-specific Compose configuration.
-"${SCRIPT_DIR}/generate-compose" "${SECURITY_MODE}"
+"${SCRIPT_DIR}/generate-compose-overlay" "${SECURITY_MODE}"
 
 # Start the DevPod workspace.
-"${SCRIPT_DIR}/start-devpod" "${SECURITY_MODE}"
+"${SCRIPT_DIR}/recreate-workspace" "${SECURITY_MODE}"

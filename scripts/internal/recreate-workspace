@@ -7,6 +7,17 @@ SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
+CONFIG_FILE="${REPO_ROOT}/.env"
+
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+  echo "Configuration file not found: ${CONFIG_FILE}" >&2
+  exit 1
+fi
+
+# Load project configuration.
+# shellcheck disable=SC1090
+source "${CONFIG_FILE}"
+
 if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; then
   echo "Invalid security mode: ${SECURITY_MODE}" >&2
   exit 1
@@ -17,13 +28,18 @@ echo "Starting DevPod (${SECURITY_MODE})..."
 echo
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+  if [[ -z "${DOTFILES_REPOSITORY:-}" ]]; then
+    echo "DOTFILES_REPOSITORY is not configured." >&2
+    exit 1
+  fi
+
   echo "Dotfiles: enabled"
 
   devpod up "${REPO_ROOT}" \
     --recreate \
     --context "${SECURITY_MODE}" \
     --ide none \
-    --dotfiles git@github.com:ant1179/dotfiles-devpods.git
+    --dotfiles "${DOTFILES_REPOSITORY}"
 else
   echo "Dotfiles: disabled (bunkered mode)"
 

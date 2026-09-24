@@ -58,7 +58,7 @@ up)
 
     # Recreate and fully configure the devcontainer.
     select_security_mode
-    "${INTERNAL_DIR}/bootstrap" "${SECURITY_MODE}"
+    "${INTERNAL_DIR}/recreate-environment" "${SECURITY_MODE}"
   else
     if [[ $# -ne 0 ]]; then
       usage
@@ -66,7 +66,7 @@ up)
     fi
 
     # Start the existing devcontainer without changing its configuration.
-    "${INTERNAL_DIR}/devpod" up . --ide none
+    "${INTERNAL_DIR}/devpod-wrapper" up . --ide none
   fi
   ;;
 
@@ -79,7 +79,7 @@ ssh)
   fi
 
   # Connect to the existing devcontainer without changing its configuration.
-  "${INTERNAL_DIR}/devpod" ssh .
+  "${INTERNAL_DIR}/devpod-wrapper" ssh .
   ;;
 
 delete)
@@ -90,7 +90,7 @@ delete)
     exit 1
   fi
 
-  "${INTERNAL_DIR}/devpod" delete .
+  "${INTERNAL_DIR}/devpod-wrapper" delete .
   ;;
 
 *)
