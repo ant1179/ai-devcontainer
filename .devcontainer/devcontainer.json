@@ -1,5 +1,5 @@
 {
-  "name": "ai-devcontainer",
+  "name": "Secure AI Devcontainer",
   "dockerComposeFile": [
     "docker-compose.yaml",
     "docker-compose.generated.yaml"

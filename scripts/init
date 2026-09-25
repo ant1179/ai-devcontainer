@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+ENV_FILE="${REPO_ROOT}/.env"
+ENV_EXAMPLE_FILE="${REPO_ROOT}/.env.example"
+
+PROJECT_NAME="$(basename "${REPO_ROOT}")"
+
+if [[ ! -f "${ENV_EXAMPLE_FILE}" ]]; then
+  echo "Configuration template not found: ${ENV_EXAMPLE_FILE}" >&2
+  exit 1
+fi
+
+if [[ -f "${ENV_FILE}" ]]; then
+  echo "Configuration already exists: ${ENV_FILE}" >&2
+  echo "Remove it first if you want to reinitialize this project." >&2
+  exit 1
+fi
+
+echo "Initializing devcontainer configuration"
+echo
+echo "Project name: ${PROJECT_NAME}"
+echo
+
+read -rp "Dotfiles repository (leave empty to disable): " DOTFILES_REPOSITORY
+
+cat >"${ENV_FILE}" <<EOF
+PROJECT_NAME="${PROJECT_NAME}"
+DOTFILES_REPOSITORY="${DOTFILES_REPOSITORY}"
+EOF
+
+chmod 600 "${ENV_FILE}"
+
+echo
+echo "Configuration created: ${ENV_FILE}"
+echo
+echo "You can now create the devcontainer with:"
+echo
+echo "  ./scripts/devcontainer up --recreate"
