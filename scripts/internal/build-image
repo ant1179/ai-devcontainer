@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Builds the devcontainer image for the selected security mode.
+#
+# Project configuration is loaded from .env, while build credentials are
+# retrieved from the project-specific secrets directory outside the workspace.
+# Sensitive values are passed to Podman as build secrets and are not persisted
+# in the resulting image.
+
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
@@ -36,7 +43,11 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-# Read build credentials without exporting them globally.
+# Read build credentials into shell variables without exporting them.
+# Hardened-only credentials are intentionally ignored in bunkered mode.
+# Expose secrets only to the Podman build process.
+# BuildKit-style secret mounts keep their values out of image layers and
+# metadata, while the cache key is deliberately non-sensitive.
 MISE_GITHUB_TOKEN="$(
   grep '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" 2>/dev/null |
     cut -d= -f2- || true
@@ -88,6 +99,7 @@ MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
   -t "${IMAGE_NAME}" \
   "${REPO_ROOT}"
 
+# Remove sensitive values from the current shell environment after the build.
 unset MISE_GITHUB_TOKEN
 unset VSCODE_PASSWORD_HASH
 unset VSCODE_PASSWORD_CACHE_KEY

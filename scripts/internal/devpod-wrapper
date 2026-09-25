@@ -1,15 +1,38 @@
 #!/usr/bin/env bash
 
+# Wraps DevPod commands with project-specific behavior.
+#
+# The wrapper exposes the dedicated SSH agent when available, ensures SSH
+# sessions start in the workspace, and cleans up project-specific SSH agent
+# resources when the DevPod workspace is deleted.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-PROJECT_NAME="$(basename "${REPO_ROOT}")"
+CONFIG_FILE="${REPO_ROOT}/.env"
+
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+  echo "Configuration file not found: ${CONFIG_FILE}" >&2
+  exit 1
+fi
+
+# Load project configuration.
+# shellcheck disable=SC1090
+source "${CONFIG_FILE}"
+
+if [[ -z "${PROJECT_NAME:-}" ]]; then
+  echo "PROJECT_NAME is not configured." >&2
+  exit 1
+fi
+
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
 SSH_AGENT_SOCKET="${SECRETS_DIR}/ssh-agent.sock"
 
+# Stop only the SSH agent previously created for this project.
+# Verify the recorded PID still belongs to ssh-agent before killing it.
 cleanup_ssh_agent() {
   local old_ssh_agent_pid=""
   local process_name=""
@@ -38,18 +61,22 @@ cleanup_ssh_agent() {
   rm -f "${SSH_AGENT_ENV}"
 }
 
+# Expose only the project-specific SSH agent to DevPod.
+# Never fall back to the host SSH agent when the dedicated socket is absent.
 if [[ -S "${SSH_AGENT_SOCKET}" ]]; then
   export SSH_AUTH_SOCK="${SSH_AGENT_SOCKET}"
 else
   unset SSH_AUTH_SOCK || true
 fi
 
+# Delete the DevPod workspace first, then clean up its dedicated SSH agent.
 if [[ "${1:-}" == "delete" ]]; then
   devpod "$@"
   cleanup_ssh_agent
   exit 0
 fi
 
+# Always enter the container directly in the project workspace.
 if [[ "${1:-}" == "ssh" ]]; then
   exec devpod "$@" --workdir /workspaces/vscode
 fi

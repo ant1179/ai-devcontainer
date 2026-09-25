@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Recreates the DevPod workspace using the selected security mode.
+#
+# Hardened mode enables the configured dotfiles repository, while bunkered
+# mode deliberately starts without dotfiles to minimize the environment's
+# access to user-specific configuration.
+
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
@@ -27,6 +33,8 @@ echo
 echo "Starting DevPod (${SECURITY_MODE})..."
 echo
 
+# Dotfiles are intentionally available only in hardened mode.
+# Bunkered mode avoids injecting user-specific configuration into the container.
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
   if [[ -z "${DOTFILES_REPOSITORY:-}" ]]; then
     echo "DOTFILES_REPOSITORY is not configured." >&2

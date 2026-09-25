@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# Initializes a new project created from the devcontainer template.
+#
+# The project name is derived from the repository directory name and written
+# to the local .env configuration together with optional user-specific
+# settings such as the dotfiles repository.
+#
+# This script never overwrites an existing .env configuration.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,6 +16,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 ENV_EXAMPLE_FILE="${REPO_ROOT}/.env.example"
 
+# A project created from the template inherits its identity from its directory.
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
 
 if [[ ! -f "${ENV_EXAMPLE_FILE}" ]]; then
@@ -28,6 +37,8 @@ echo
 
 read -rp "Dotfiles repository (leave empty to disable): " DOTFILES_REPOSITORY
 
+# Generate the local project configuration. The file is intentionally excluded
+# from Git because each project instance may contain user-specific settings.
 cat >"${ENV_FILE}" <<EOF
 PROJECT_NAME="${PROJECT_NAME}"
 DOTFILES_REPOSITORY="${DOTFILES_REPOSITORY}"

@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# User-facing entry point for the devcontainer lifecycle.
+#
+# This command intentionally separates two workflows:
+#   - regular operations (up, ssh, delete) preserve the existing environment;
+#   - up --recreate performs a full configuration and recreation.
+#
+# Implementation details are delegated to scripts/internal/.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,6 +20,8 @@ usage() {
   echo "  $0 delete"
 }
 
+# Security mode is selected only when recreating the environment.
+# Starting or connecting to an existing devcontainer must never alter its mode.
 select_security_mode() {
   echo "Security mode:"
   echo
@@ -90,6 +100,7 @@ delete)
     exit 1
   fi
 
+  # Delete the DevPod workspace and clean up environment-specific resources.
   "${INTERNAL_DIR}/devpod-wrapper" delete .
   ;;
 

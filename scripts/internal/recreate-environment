@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Orchestrates the complete recreation of the devcontainer environment.
+#
+# This script prepares host-side secrets and SSH access, builds the image,
+# generates the security-specific Compose overlay, and recreates the
+# DevPod workspace using the selected security mode.
+
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
@@ -7,7 +13,22 @@ SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-PROJECT_NAME="$(basename "${REPO_ROOT}")"
+CONFIG_FILE="${REPO_ROOT}/.env"
+
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+  echo "Configuration file not found: ${CONFIG_FILE}" >&2
+  exit 1
+fi
+
+# Load project configuration.
+# shellcheck disable=SC1090
+source "${CONFIG_FILE}"
+
+if [[ -z "${PROJECT_NAME:-}" ]]; then
+  echo "PROJECT_NAME is not configured." >&2
+  exit 1
+fi
+
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
 
@@ -20,7 +41,7 @@ fi
 devpod context use "${SECURITY_MODE}"
 echo
 
-# Prepare persistent build secrets.
+# Configure a dedicated SSH agent in hardened mode, or remove it in bunkered mode.
 "${SCRIPT_DIR}/setup-secrets" "${SECURITY_MODE}"
 
 # Configure the dedicated SSH agent.

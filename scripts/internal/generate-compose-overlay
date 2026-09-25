@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Generates the security-specific Docker Compose overlay.
+#
+# The overlay applies runtime hardening for the selected security mode and
+# masks workspace paths matching the AI denylist so they are not accessible
+# from inside the devcontainer.
+
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
@@ -20,6 +26,8 @@ if [[ ! -f "${DENYLIST_FILE}" ]]; then
   exit 1
 fi
 
+# Resolve denylist patterns on the host before the workspace is mounted.
+# The resulting paths will later be masked inside the container.
 TMP_MATCHES="$(mktemp)"
 trap 'rm -f "${TMP_MATCHES}"' EXIT
 
@@ -41,9 +49,13 @@ done <"${DENYLIST_FILE}"
   echo "services:"
   echo "  app:"
 
+  # Start from an empty capability set, then restore only the capabilities
+  # required by each security mode during container initialization.
   echo "    cap_drop:"
   echo "      - ALL"
 
+  # Hardened mode allows controlled privilege escalation through sudo.
+  # Bunkered mode prevents privilege escalation entirely with no-new-privileges.
   if [[ "${SECURITY_MODE}" == "hardened" ]]; then
     echo "    cap_add:"
     echo "      - SETUID"
@@ -62,6 +74,9 @@ done <"${DENYLIST_FILE}"
 
   echo "    volumes:"
 
+  # Mask denied directories with empty tmpfs mounts and denied files with
+  # read-only /dev/null mounts. This prevents tools and AI agents inside the
+  # workspace from reading the original host content.
   sort -u "${TMP_MATCHES}" | while IFS= read -r file; do
     relative="${file#./}"
 

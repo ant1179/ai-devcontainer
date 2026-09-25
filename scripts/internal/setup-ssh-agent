@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Manages the dedicated SSH agent used by the devcontainer.
+#
+# Hardened mode creates an isolated SSH agent containing only the keys
+# explicitly selected by the user. The host SSH agent is never forwarded
+# directly. Bunkered mode removes any dedicated agent for the project.
+
 set -euo pipefail
 
 SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
@@ -7,7 +13,22 @@ SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-PROJECT_NAME="$(basename "${REPO_ROOT}")"
+CONFIG_FILE="${REPO_ROOT}/.env"
+
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+  echo "Configuration file not found: ${CONFIG_FILE}" >&2
+  exit 1
+fi
+
+# Load project configuration.
+# shellcheck disable=SC1090
+source "${CONFIG_FILE}"
+
+if [[ -z "${PROJECT_NAME:-}" ]]; then
+  echo "PROJECT_NAME is not configured." >&2
+  exit 1
+fi
+
 SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
 SSH_AGENT_ENV="${SECRETS_DIR}/ssh-agent.env"
 SSH_AGENT_SOCKET="${SECRETS_DIR}/ssh-agent.sock"
@@ -20,6 +41,8 @@ fi
 mkdir -p "${SECRETS_DIR}"
 chmod 700 "${SECRETS_DIR}"
 
+# Stop only the SSH agent previously created for this project.
+# Verify the recorded PID still belongs to ssh-agent before killing it.
 cleanup_ssh_agent() {
   local old_ssh_agent_pid=""
   local process_name=""
@@ -62,6 +85,8 @@ setup_ssh_agent() {
     exit 1
   fi
 
+  # Discover valid private SSH keys without relying on filename conventions.
+  # Public keys and standard SSH configuration files are explicitly ignored.
   while IFS= read -r key; do
     case "$(basename "${key}")" in
     *.pub | known_hosts | known_hosts.old | authorized_keys | config)
@@ -95,6 +120,8 @@ setup_ssh_agent() {
     return
   fi
 
+  # Use a stable project-specific socket so DevPod can forward this dedicated
+  # agent without exposing the host SSH agent or the private key files.
   eval "$(ssh-agent -a "${SSH_AGENT_SOCKET}" -s)" >/dev/null
 
   {
