@@ -1,107 +1,191 @@
 #!/usr/bin/env bash
 
-# Builds the devcontainer image for the selected security mode.
+# Builds the local devcontainer image for the selected security mode.
 #
-# Project configuration is loaded from .env, while build credentials are
-# retrieved from the project-specific secrets directory outside the workspace.
-# Sensitive values are passed to Podman as build secrets and are not persisted
-# in the resulting image.
+# Each build gets its own isolated temporary directory containing:
+#   - the minimal Podman build context;
+#   - temporary files used as build secret sources;
+#   - a private TMPDIR used by Podman.
+#
+# The entire directory is removed when the build finishes, whether it succeeds
+# or fails. This also removes temporary files that Podman Remote may leave
+# behind after transmitting build secrets.
 
 set -euo pipefail
 
-SECURITY_MODE="${1:?Security mode required: hardened or bunkered}"
+SECURITY_MODE="${1:-}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-CONFIG_FILE="${REPO_ROOT}/.env"
+ENV_FILE="${REPO_ROOT}/.env"
 
-if [[ ! -f "${CONFIG_FILE}" ]]; then
-  echo "Configuration file not found: ${CONFIG_FILE}" >&2
+#
+# Load project configuration.
+#
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "Project configuration not found: ${ENV_FILE}" >&2
+  echo "Run ./scripts/init first." >&2
   exit 1
 fi
 
-# Load project configuration.
 # shellcheck disable=SC1090
-source "${CONFIG_FILE}"
+source "${ENV_FILE}"
 
 if [[ -z "${PROJECT_NAME:-}" ]]; then
-  echo "PROJECT_NAME is not configured." >&2
+  echo "PROJECT_NAME is not defined in ${ENV_FILE}" >&2
   exit 1
+fi
+
+#
+# Validate the requested security mode.
+#
+case "${SECURITY_MODE}" in
+hardened | bunkered)
+  ;;
+*)
+  echo "Usage: $0 {hardened|bunkered}" >&2
+  exit 1
+  ;;
+esac
+
+#
+# Secrets are isolated per project.
+#
+SECRETS_FILE="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}/secrets.env"
+
+if [[ ! -f "${SECRETS_FILE}" ]]; then
+  echo "Secrets file not found: ${SECRETS_FILE}" >&2
+  exit 1
+fi
+
+#
+# Read secrets literally rather than sourcing the file.
+#
+# Password hashes contain '$' characters and therefore must not be evaluated
+# as shell expressions.
+#
+MISE_GITHUB_TOKEN="$(
+  sed -n 's/^MISE_GITHUB_TOKEN=//p' "${SECRETS_FILE}"
+)"
+
+VSCODE_PASSWORD_HASH="$(
+  sed -n 's/^VSCODE_PASSWORD_HASH=//p' "${SECRETS_FILE}"
+)"
+
+VSCODE_PASSWORD_CACHE_KEY="$(
+  sed -n 's/^VSCODE_PASSWORD_CACHE_KEY=//p' "${SECRETS_FILE}"
+)"
+
+#
+# Validate the secrets required by the selected mode.
+#
+if [[ -z "${MISE_GITHUB_TOKEN:-}" ]]; then
+  echo "MISE_GITHUB_TOKEN is not defined in ${SECRETS_FILE}" >&2
+  exit 1
+fi
+
+if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+  if [[ -z "${VSCODE_PASSWORD_HASH:-}" ]]; then
+    echo "VSCODE_PASSWORD_HASH is not defined in ${SECRETS_FILE}" >&2
+    exit 1
+  fi
+
+  if [[ -z "${VSCODE_PASSWORD_CACHE_KEY:-}" ]]; then
+    echo "VSCODE_PASSWORD_CACHE_KEY is not defined in ${SECRETS_FILE}" >&2
+    exit 1
+  fi
 fi
 
 IMAGE_NAME="${PROJECT_NAME}:local"
-SECRETS_DIR="${HOME}/.config/ai-devcontainer/${PROJECT_NAME}"
-ENV_FILE="${SECRETS_DIR}/secrets.env"
 
-if [[ "${SECURITY_MODE}" != "hardened" && "${SECURITY_MODE}" != "bunkered" ]]; then
-  echo "Invalid security mode: ${SECURITY_MODE}" >&2
-  exit 1
-fi
+#
+# Create one unique temporary directory for the entire build.
+#
+# mktemp creates the directory atomically, allowing multiple builds to run
+# concurrently without sharing temporary files.
+#
+BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ai-devcontainer-build.XXXXXX")"
 
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "Secrets file not found: ${ENV_FILE}" >&2
-  exit 1
-fi
+BUILD_CONTEXT="${BUILD_ROOT}/context"
+BUILD_SECRETS="${BUILD_ROOT}/secrets"
+BUILD_TMP="${BUILD_ROOT}/tmp"
 
-# Read build credentials into shell variables without exporting them.
-# Hardened-only credentials are intentionally ignored in bunkered mode.
-# Expose secrets only to the Podman build process.
-# BuildKit-style secret mounts keep their values out of image layers and
-# metadata, while the cache key is deliberately non-sensitive.
-MISE_GITHUB_TOKEN="$(
-  grep '^MISE_GITHUB_TOKEN=' "${ENV_FILE}" 2>/dev/null |
-    cut -d= -f2- || true
-)"
+mkdir -p \
+  "${BUILD_CONTEXT}" \
+  "${BUILD_SECRETS}" \
+  "${BUILD_TMP}"
 
-VSCODE_PASSWORD_HASH=""
-VSCODE_PASSWORD_CACHE_KEY=""
+chmod 700 \
+  "${BUILD_ROOT}" \
+  "${BUILD_SECRETS}" \
+  "${BUILD_TMP}"
+
+#
+# Always remove the complete temporary build environment.
+#
+# This includes our secret source files as well as any podman-build-secret-*
+# files Podman Remote may create inside its private TMPDIR.
+#
+cleanup() {
+  rm -rf "${BUILD_ROOT}"
+}
+
+trap cleanup EXIT
+
+#
+# Prepare the minimal build context.
+#
+# The Dockerfile only requires mise.toml from the local repository.
+#
+cp "${REPO_ROOT}/.devcontainer/Dockerfile" \
+  "${BUILD_CONTEXT}/Dockerfile"
+
+cp "${REPO_ROOT}/mise.toml" \
+  "${BUILD_CONTEXT}/mise.toml"
+
+#
+# Materialize build secrets inside the isolated build directory.
+#
+MISE_GITHUB_TOKEN_FILE="${BUILD_SECRETS}/mise_github_token"
+
+printf '%s' "${MISE_GITHUB_TOKEN}" >"${MISE_GITHUB_TOKEN_FILE}"
+chmod 600 "${MISE_GITHUB_TOKEN_FILE}"
+
+VSCODE_PASSWORD_HASH_FILE=""
 
 if [[ "${SECURITY_MODE}" == "hardened" ]]; then
-  VSCODE_PASSWORD_HASH="$(
-    grep '^VSCODE_PASSWORD_HASH=' "${ENV_FILE}" 2>/dev/null |
-      cut -d= -f2- || true
-  )"
+  VSCODE_PASSWORD_HASH_FILE="${BUILD_SECRETS}/vscode_password_hash"
 
-  VSCODE_PASSWORD_CACHE_KEY="$(
-    grep '^VSCODE_PASSWORD_CACHE_KEY=' "${ENV_FILE}" 2>/dev/null |
-      cut -d= -f2- || true
-  )"
+  printf '%s' "${VSCODE_PASSWORD_HASH}" >"${VSCODE_PASSWORD_HASH_FILE}"
+  chmod 600 "${VSCODE_PASSWORD_HASH_FILE}"
 fi
 
-if [[ -z "${MISE_GITHUB_TOKEN}" ]]; then
-  echo "Missing MISE_GITHUB_TOKEN." >&2
-  exit 1
+echo "Building ${IMAGE_NAME} (${SECURITY_MODE})"
+
+#
+# Run Podman with a private TMPDIR.
+#
+# Podman Remote may materialize transmitted build secrets as temporary
+# podman-build-secret-* files. Pointing TMPDIR at BUILD_TMP keeps those files
+# inside this build's disposable directory.
+#
+if [[ "${SECURITY_MODE}" == "hardened" ]]; then
+  TMPDIR="${BUILD_TMP}" podman build \
+    --build-arg SECURITY_MODE="${SECURITY_MODE}" \
+    --build-arg VSCODE_PASSWORD_CACHE_KEY="${VSCODE_PASSWORD_CACHE_KEY}" \
+    --secret id=mise_github_token,src="${MISE_GITHUB_TOKEN_FILE}" \
+    --secret id=vscode_password_hash,src="${VSCODE_PASSWORD_HASH_FILE}" \
+    -f "${BUILD_CONTEXT}/Dockerfile" \
+    -t "${IMAGE_NAME}" \
+    "${BUILD_CONTEXT}"
+else
+  TMPDIR="${BUILD_TMP}" podman build \
+    --build-arg SECURITY_MODE="${SECURITY_MODE}" \
+    --secret id=mise_github_token,src="${MISE_GITHUB_TOKEN_FILE}" \
+    -f "${BUILD_CONTEXT}/Dockerfile" \
+    -t "${IMAGE_NAME}" \
+    "${BUILD_CONTEXT}"
 fi
 
-if [[ "${SECURITY_MODE}" == "hardened" ]] &&
-  [[ -z "${VSCODE_PASSWORD_HASH}" ]]; then
-  echo "Missing VSCODE_PASSWORD_HASH." >&2
-  exit 1
-fi
-
-if [[ "${SECURITY_MODE}" == "hardened" ]] &&
-  [[ -z "${VSCODE_PASSWORD_CACHE_KEY}" ]]; then
-  echo "Missing VSCODE_PASSWORD_CACHE_KEY." >&2
-  exit 1
-fi
-
-echo
-echo "Building devcontainer image..."
-
-MISE_GITHUB_TOKEN="${MISE_GITHUB_TOKEN}" \
-  VSCODE_PASSWORD_HASH="${VSCODE_PASSWORD_HASH}" \
-  podman build \
-  --build-arg SECURITY_MODE="${SECURITY_MODE}" \
-  --build-arg VSCODE_PASSWORD_CACHE_KEY="${VSCODE_PASSWORD_CACHE_KEY}" \
-  --secret id=mise_github_token,env=MISE_GITHUB_TOKEN \
-  --secret id=vscode_password_hash,env=VSCODE_PASSWORD_HASH \
-  -f "${REPO_ROOT}/.devcontainer/Dockerfile" \
-  -t "${IMAGE_NAME}" \
-  "${REPO_ROOT}"
-
-# Remove sensitive values from the current shell environment after the build.
-unset MISE_GITHUB_TOKEN
-unset VSCODE_PASSWORD_HASH
-unset VSCODE_PASSWORD_CACHE_KEY
-
-echo "Image built: ${IMAGE_NAME}"
+echo "Image built successfully: ${IMAGE_NAME}"

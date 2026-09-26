@@ -5,8 +5,10 @@ services:
     cap_add:
       - SETUID
       - SETGID
-      - AUDIT_WRITE
+      - CHOWN
       - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - type: tmpfs
         target: /workspaces/vscode/.devcontainer
