@@ -1,3 +1,6 @@
+# Generated security overlay
+.devcontainer/docker-compose.generated.yaml
+
 # devcontainer
 *.agekey
 age*

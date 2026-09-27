@@ -27,6 +27,7 @@ The repository is intended to be used as a **GitHub Template Repository**. Each 
 - [Lifecycle architecture](#lifecycle-architecture)
 - [Using Docker instead of Podman](#using-docker-instead-of-podman)
 - [Security considerations](#security-considerations)
+- [License](#license)
 
 ---
 
@@ -569,3 +570,7 @@ Before using the environment with sensitive repositories, review:
 - any additional host resources exposed by your DevPod configuration.
 
 The appropriate security mode depends on how much access the development workflow actually requires.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
