@@ -60,7 +60,7 @@ They should be considered **defense in depth**, not a replacement for the permis
 | `mise` and development tools | Yes | Yes |
 | `zsh` | Yes | Yes |
 | Workspace denylist | Yes | Yes |
-| Personal dotfiles | Yes | No |
+| Personal dotfiles | Optional | No |
 | `chezmoi` | Yes | No |
 | SSH agent | Dedicated, selected keys only | No |
 | `sudo` | Password required every time | No privilege escalation |
@@ -315,9 +315,27 @@ Project-specific secrets are stored under:
 
 with restrictive filesystem permissions.
 
+These secrets are persistent across DevPod workspace recreation and deletion.
+
+For example, the GitHub token used by `mise` is requested when it is not already configured for the project and is reused by subsequent recreations.
+
+Deleting the DevPod workspace does not delete the project's persistent secrets.
+
 This prevents tools operating only inside the mounted project workspace from directly reading those files.
 
 Build credentials are passed to Podman using build secrets.
+
+Each image build uses a dedicated temporary build directory.
+
+The directory contains:
+
+- the minimal build context;
+- temporary build-secret source files;
+- a private `TMPDIR` used by Podman.
+
+The complete directory is removed automatically when the build finishes, including when the build fails.
+
+This also ensures that temporary `podman-build-secret-*` files created by Podman Remote remain confined to the disposable build directory rather than being left in or next to the project repository.
 
 They are not intended to become:
 
