@@ -4,4 +4,4 @@ services:
     command: sleep infinity
 
     volumes:
-      - ..:/workspaces/vscode:cached
+      - ..:/workspaces/vscode:rw,Z

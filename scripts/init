@@ -6,6 +6,9 @@
 # to the local .env configuration together with optional user-specific
 # settings such as the dotfiles repository.
 #
+# Host prerequisites are validated before any project configuration is
+# created. This script does not install or configure host dependencies.
+#
 # This script never overwrites an existing .env configuration.
 
 set -euo pipefail
@@ -15,12 +18,22 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 ENV_FILE="${REPO_ROOT}/.env"
 ENV_EXAMPLE_FILE="${REPO_ROOT}/.env.example"
+DOCTOR="${REPO_ROOT}/scripts/internal/doctor"
 
 # A project created from the template inherits its identity from its directory.
 PROJECT_NAME="$(basename "${REPO_ROOT}")"
 
+# ---------------------------------------------------------------------------
+# Validate template
+# ---------------------------------------------------------------------------
+
 if [[ ! -f "${ENV_EXAMPLE_FILE}" ]]; then
   echo "Configuration template not found: ${ENV_EXAMPLE_FILE}" >&2
+  exit 1
+fi
+
+if [[ ! -x "${DOCTOR}" ]]; then
+  echo "Prerequisite checker not found or not executable: ${DOCTOR}" >&2
   exit 1
 fi
 
@@ -30,6 +43,25 @@ if [[ -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Validate host prerequisites
+# ---------------------------------------------------------------------------
+
+echo "Validating host prerequisites..."
+echo
+
+if ! "${DOCTOR}"; then
+  echo >&2
+  echo "Initialization aborted because host prerequisites are not satisfied." >&2
+  echo "See README.md → Installation prerequisites." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Initialize project configuration
+# ---------------------------------------------------------------------------
+
+echo
 echo "Initializing devcontainer configuration"
 echo
 echo "Project name: ${PROJECT_NAME}"
@@ -45,6 +77,10 @@ DOTFILES_REPOSITORY="${DOTFILES_REPOSITORY}"
 EOF
 
 chmod 600 "${ENV_FILE}"
+
+# ---------------------------------------------------------------------------
+# Done
+# ---------------------------------------------------------------------------
 
 echo
 echo "Configuration created: ${ENV_FILE}"

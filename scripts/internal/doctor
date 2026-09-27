@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+
+# Checks whether the host environment satisfies the prerequisites required
+# by the secure AI devcontainer.
+#
+# This script is diagnostic only. It must not install, configure or modify
+# Podman, DevPod, providers, contexts or host services.
+
+set -uo pipefail
+
+ERRORS=0
+
+ok() {
+  printf '✓ %s\n' "$1"
+}
+
+fail() {
+  printf '✗ %s\n' "$1" >&2
+  ERRORS=$((ERRORS + 1))
+}
+
+echo "Checking ai-devcontainer prerequisites..."
+echo
+
+# ---------------------------------------------------------------------------
+# Podman
+# ---------------------------------------------------------------------------
+
+if command -v podman >/dev/null 2>&1; then
+  ok "Podman found"
+
+  if podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null |
+    grep -qx 'true'; then
+    ok "Podman is running rootless"
+  else
+    fail "Podman is not running rootless"
+  fi
+
+  if podman ps >/dev/null 2>&1; then
+    ok "Podman connection is usable"
+  else
+    fail "Podman connection is not usable"
+  fi
+
+  if podman compose version >/dev/null 2>&1; then
+    ok "Podman Compose support is available"
+  else
+    fail "Podman Compose support is not available"
+  fi
+else
+  fail "Podman not found"
+fi
+
+# ---------------------------------------------------------------------------
+# DevPod
+# ---------------------------------------------------------------------------
+
+if command -v devpod >/dev/null 2>&1; then
+  ok "DevPod found"
+
+  # -------------------------------------------------------------------------
+  # Podman provider
+  # -------------------------------------------------------------------------
+
+  if devpod provider list 2>/dev/null |
+    grep -qE '(^|[[:space:]])podman([[:space:]]|$)'; then
+    ok "DevPod Podman provider found"
+  else
+    fail "DevPod Podman provider not found"
+  fi
+
+  # -------------------------------------------------------------------------
+  # DevPod contexts
+  # -------------------------------------------------------------------------
+
+  check_context() {
+    local context="$1"
+    local expected_ssh_forwarding="$2"
+    local options
+    local context_errors=0
+
+    # The context must be explicitly selected with --context.
+    # DevPod context commands do not take the context name as a
+    # positional argument.
+    if ! options="$(
+      devpod context options \
+        --context "${context}" \
+        2>/dev/null
+    )"; then
+      fail "DevPod context '${context}' not found or cannot be read"
+      return
+    fi
+
+    ok "DevPod context '${context}' found"
+
+    check_option() {
+      local option="$1"
+      local expected="$2"
+      local actual
+
+      actual="$(
+        printf '%s\n' "${options}" |
+          awk -F'|' -v option="${option}" '
+            $1 ~ option {
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", $4)
+              print $4
+              exit
+            }
+          '
+      )"
+
+      if [[ "${actual}" != "${expected}" ]]; then
+        fail "${context}: expected ${option}=${expected} (found '${actual:-unset}')"
+        context_errors=$((context_errors + 1))
+      fi
+    }
+
+    check_option "SSH_AGENT_FORWARDING" "${expected_ssh_forwarding}"
+    check_option "SSH_ADD_PRIVATE_KEYS" "false"
+    check_option "SSH_INJECT_GIT_CREDENTIALS" "false"
+    check_option "SSH_INJECT_DOCKER_CREDENTIALS" "false"
+    check_option "GIT_SSH_SIGNATURE_FORWARDING" "false"
+    check_option "GPG_AGENT_FORWARDING" "false"
+
+    if ((context_errors == 0)); then
+      ok "DevPod context '${context}' security options are valid"
+    fi
+  }
+
+  check_context hardened true
+  check_context bunkered false
+
+else
+  fail "DevPod not found"
+fi
+
+# ---------------------------------------------------------------------------
+# Result
+# ---------------------------------------------------------------------------
+
+echo
+
+if ((ERRORS > 0)); then
+  echo "Prerequisite check failed with ${ERRORS} issue(s)." >&2
+  echo "See README.md → Installation prerequisites." >&2
+  exit 1
+fi
+
+echo "All prerequisites are satisfied."
