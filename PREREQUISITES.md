@@ -160,6 +160,7 @@ devpod context set-options \
   -o SSH_INJECT_DOCKER_CREDENTIALS=false \
   -o GIT_SSH_SIGNATURE_FORWARDING=false \
   -o GPG_AGENT_FORWARDING=false
+```
 
 Bunkered requires: SSH_AGENT_FORWARDING=false
 
