@@ -14,8 +14,6 @@ the host setup first:
 For details about the architecture, security model and configuration,
 see the [README](README.md).
 
-------------------------------------------------------------------------
-
 ## 1. Create a project from the template
 
 On GitHub, select:
@@ -33,8 +31,6 @@ git clone <your-new-repository>
 cd <your-project>
 ```
 
-------------------------------------------------------------------------
-
 ## 2. Check the host
 
 Run:
@@ -48,8 +44,6 @@ All checks should succeed before continuing.
 `doctor` validates that the host satisfies the requirements described in
 [PREREQUISITES.md](PREREQUISITES.md). It does not modify the host
 configuration.
-
-------------------------------------------------------------------------
 
 ## 3. Initialize the project
 
@@ -68,8 +62,6 @@ Run:
 
 The `.env` file contains project configuration only. Secrets are stored
 separately outside the workspace.
-
-------------------------------------------------------------------------
 
 ## 4. Create the devcontainer
 
@@ -108,7 +100,7 @@ Select `bunkered` for the more restrictive environment:
 
 The first recreation may request the GitHub token required by `mise`.
 
-------------------------------------------------------------------------
+Note on the mise github token: mise is used by the devcontainer to install dependencies. In order to avoid rate limiting by github, you have to provide a personal access token for mise. A token without any privileges works fine.
 
 ## 5. Connect
 
@@ -123,8 +115,6 @@ The session starts in:
 ``` text
 /workspaces/vscode
 ```
-
-------------------------------------------------------------------------
 
 ## Daily commands
 
@@ -151,8 +141,6 @@ Delete the environment:
 ``` bash
 ./scripts/devcontainer delete
 ```
-
-------------------------------------------------------------------------
 
 ## Command semantics
 
@@ -209,8 +197,6 @@ state.
 
 Persistent project secrets stored outside the workspace are not
 automatically removed.
-
-------------------------------------------------------------------------
 
 ## Next steps
 
