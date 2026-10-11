@@ -76,7 +76,9 @@ PROJECT_NAME="${PROJECT_NAME}"
 DOTFILES_REPOSITORY="${DOTFILES_REPOSITORY}"
 EOF
 
-chmod 600 "${ENV_FILE}"
+# .env file contains project configuration only, not sercrets.
+# It must remain readable after rootless Podman UID mapping.
+chmod 644 "${ENV_FILE}"
 
 # ---------------------------------------------------------------------------
 # Done
