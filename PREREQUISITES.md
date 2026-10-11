@@ -21,8 +21,6 @@ The reference Linux setup uses:
 
 Note: These choices are the project default. Feel free to replace them with your favorite implementation.
 
-⸻
-
 ## Install the host packages
 
 In order for the container to work, you need to install the following packages on your host system:
@@ -40,8 +38,6 @@ git --version
 podman --version
 ```
 
-⸻
-
 ## Verify rootless Podman
 
 Podman must run rootless for the current user.
@@ -55,9 +51,6 @@ podman info --format '{{.Host.Security.Rootless}}'
 
 podman ps
 ```
-
-
-⸻
 
 ## Enable the Podman user socket
 
@@ -77,8 +70,6 @@ systemctl --user is-active podman.socket
 ls -l "$XDG_RUNTIME_DIR/podman/podman.sock"
 ```
 
-⸻
-
 ## Verify Compose support
 
 Podman must have access to a compatible Compose implementation.
@@ -90,8 +81,6 @@ podman compose version
 ```
 
 The reference Linux setup uses Docker Compose rather than podman-compose.
-
-⸻
 
 ## Install DevPod CLI
 
@@ -111,8 +100,6 @@ devpod version
 
 command -v devpod
 ```
-
-⸻
 
 ## Configure the Hardened context
 
@@ -139,7 +126,6 @@ devpod context set-options \
   -o SSH_INJECT_DOCKER_CREDENTIALS=false \
   -o GIT_SSH_SIGNATURE_FORWARDING=false \
   -o GPG_AGENT_FORWARDING=false
-
 ```
 
 Hardened requires: SSH_AGENT_FORWARDING=true
@@ -147,8 +133,6 @@ Hardened requires: SSH_AGENT_FORWARDING=true
 The project does not forward the user’s normal SSH agent directly.
 
 During environment recreation, Hardened creates a dedicated SSH agent containing only explicitly selected identities.
-
-⸻
 
 ## Configure the Bunkered context
 
@@ -181,8 +165,6 @@ Bunkered requires: SSH_AGENT_FORWARDING=false
 
 No SSH agent is exposed to the Bunkered environment.
 
-⸻
-
 ## Verify the DevPod contexts
 
 Verify the SSH forwarding configuration:
@@ -214,8 +196,6 @@ done
 ```
 
 The Podman provider must be available in both contexts.
-
-⸻
 
 ## Host preparation complete
 
